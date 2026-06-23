@@ -7,6 +7,7 @@ from app.routers.auth import router as auth_router
 from app.routers.subjects import router as subjects_router
 
 from app.routers.tasks import router as tasks_router
+from app.routers.study_plans import router as study_plans_router
 
 
 app = FastAPI(
@@ -26,6 +27,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(subjects_router)
 app.include_router(tasks_router)
+app.include_router(study_plans_router)
 
 @app.get("/")
 def home():
