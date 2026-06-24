@@ -3,18 +3,19 @@ from fastapi_mail import ConnectionConfig, FastMail, MessageSchema, MessageType
 from app.config import settings
 
 
-mail_config = ConnectionConfig(
-    MAIL_USERNAME=settings.mail_username,
-    MAIL_PASSWORD=settings.mail_password,
-    MAIL_FROM=settings.mail_from,
-    MAIL_FROM_NAME=settings.mail_from_name,
-    MAIL_PORT=settings.mail_port,
-    MAIL_SERVER=settings.mail_server,
-    MAIL_STARTTLS=settings.mail_starttls,
-    MAIL_SSL_TLS=settings.mail_ssl_tls,
-    USE_CREDENTIALS=True,
-    VALIDATE_CERTS=True,
-)
+def get_mail_config() -> ConnectionConfig:
+    return ConnectionConfig(
+        MAIL_USERNAME=settings.mail_username,
+        MAIL_PASSWORD=settings.mail_password,
+        MAIL_FROM=settings.mail_from or "noreply@studymate.com",
+        MAIL_FROM_NAME=settings.mail_from_name,
+        MAIL_PORT=settings.mail_port,
+        MAIL_SERVER=settings.mail_server,
+        MAIL_STARTTLS=settings.mail_starttls,
+        MAIL_SSL_TLS=settings.mail_ssl_tls,
+        USE_CREDENTIALS=True,
+        VALIDATE_CERTS=True,
+    )
 
 
 async def send_verification_email(
@@ -75,5 +76,5 @@ async def send_verification_email(
         subtype=MessageType.html,
     )
 
-    fast_mail = FastMail(mail_config)
+    fast_mail = FastMail(get_mail_config())
     await fast_mail.send_message(message)

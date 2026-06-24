@@ -483,115 +483,19 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import api from '../services/api'
 
-const studyPlanStorageKey = 'studymate_study_plans'
-const subjectStorageKey = 'studymate_subjects'
-const taskStorageKey = 'studymate_tasks'
+const router = useRouter()
 
-const toInputDate = (date) => {
-  const offset = date.getTimezoneOffset() * 60000
-  return new Date(date.getTime() - offset).toISOString().slice(0, 10)
-}
+const subjects = ref([])
+const tasks = ref([])
+const plans = ref([])
 
-const createDateFromToday = (days) => {
-  const date = new Date()
-  date.setDate(date.getDate() + days)
-  return toInputDate(date)
-}
-
-const defaultSubjects = [
-  { id: 1, name: 'Perl & Python' },
-  { id: 2, name: 'System Integration' },
-  { id: 3, name: 'Cơ sở dữ liệu' },
-  { id: 4, name: 'Lập trình Web' },
-]
-
-const defaultTasks = [
-  {
-    id: 1,
-    subjectId: '1',
-    title: 'Ôn vòng lặp và hàm trong Python',
-  },
-  {
-    id: 2,
-    subjectId: '1',
-    title: 'Xây dựng API FastAPI cho chatbot',
-  },
-  {
-    id: 3,
-    subjectId: '2',
-    title: 'Ôn mô hình tích hợp dữ liệu',
-  },
-]
-
-const loadData = (key, defaultData) => {
-  const data = localStorage.getItem(key)
-  return data ? JSON.parse(data) : defaultData
-}
-
-const subjects = ref(loadData(subjectStorageKey, defaultSubjects))
-const tasks = ref(loadData(taskStorageKey, defaultTasks))
-
-const defaultPlans = [
-  {
-    id: 1,
-    subjectId: '1',
-    taskId: '1',
-    title: 'Ôn Python buổi tối',
-    content: 'Ôn vòng lặp for, while và viết 5 ví dụ minh họa.',
-    studyDate: createDateFromToday(0),
-    startTime: '19:00',
-    durationMinutes: 120,
-    status: 'DANG_THUC_HIEN',
-  },
-  {
-    id: 2,
-    subjectId: '1',
-    taskId: '2',
-    title: 'Thực hành FastAPI',
-    content: 'Tạo route /chat và kiểm tra request, response.',
-    studyDate: createDateFromToday(1),
-    startTime: '20:00',
-    durationMinutes: 90,
-    status: 'CHUA_THUC_HIEN',
-  },
-  {
-    id: 3,
-    subjectId: '2',
-    taskId: '3',
-    title: 'Ôn System Integration',
-    content: 'Ôn Data Integration, Functional Integration và Messaging.',
-    studyDate: createDateFromToday(2),
-    startTime: '18:30',
-    durationMinutes: 90,
-    status: 'CHUA_THUC_HIEN',
-  },
-  {
-    id: 4,
-    subjectId: '3',
-    taskId: '',
-    title: 'Ôn SQL và ERD',
-    content: 'Xem lại quan hệ bảng, khóa ngoại và view.',
-    studyDate: createDateFromToday(-1),
-    startTime: '19:30',
-    durationMinutes: 60,
-    status: 'DA_HOAN_THANH',
-  },
-]
-
-const loadPlans = () => {
-  const data = localStorage.getItem(studyPlanStorageKey)
-
-  if (data) {
-    return JSON.parse(data)
-  }
-
-  localStorage.setItem(studyPlanStorageKey, JSON.stringify(defaultPlans))
-  return defaultPlans
-}
-
-const plans = ref(loadPlans())
+const isLoading = ref(false)
+const isSaving = ref(false)
+const apiError = ref('')
 
 const searchKeyword = ref('')
 const selectedSubject = ref('')
@@ -610,6 +514,55 @@ const dateFilters = [
   { label: 'Sắp tới', value: 'UPCOMING' },
   { label: 'Đã qua', value: 'PAST' },
 ]
+
+const toInputDate = (date) => {
+  const offset = date.getTimezoneOffset() * 60000
+  return new Date(date.getTime() - offset).toISOString().slice(0, 10)
+}
+
+const createDateFromToday = (days) => {
+  const date = new Date()
+  date.setDate(date.getDate() + days)
+  return toInputDate(date)
+}
+
+const mapPlanFromApi = (plan) => ({
+  id: plan.id,
+  subjectId: String(plan.subject_id),
+  subjectName: plan.subject_name,
+  taskId: plan.task_id ? String(plan.task_id) : '',
+  taskTitle: plan.task_title || '',
+  title: plan.title,
+  content: plan.content || '',
+  studyDate: plan.study_date,
+  startTime: plan.start_time ? plan.start_time.slice(0, 5) : '',
+  durationMinutes: plan.duration_minutes,
+  status: plan.status,
+  completedAt: plan.completed_at,
+  createdAt: plan.created_at,
+  updatedAt: plan.updated_at,
+})
+
+const mapSubjectFromApi = (subject) => ({
+  id: subject.id,
+  name: subject.name,
+  color: subject.color || '#B9824C',
+})
+
+const mapTaskFromApi = (task) => ({
+  id: task.id,
+  subjectId: String(task.subject_id),
+  title: task.title,
+})
+
+const handleApiError = (error, fallbackMessage) => {
+  if (error.response?.status === 401) {
+    router.push('/dang-nhap')
+    return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.'
+  }
+
+  return error.response?.data?.detail || fallbackMessage
+}
 
 const emptyForm = () => ({
   subjectId: '',
@@ -719,10 +672,6 @@ const filteredPlans = computed(() => {
     .sort((first, second) => getPlanTimestamp(first) - getPlanTimestamp(second))
 })
 
-const persistPlans = () => {
-  localStorage.setItem(studyPlanStorageKey, JSON.stringify(plans.value))
-}
-
 const getPlanTimestamp = (plan) => {
   return new Date(`${plan.studyDate}T${plan.startTime || '00:00'}`).getTime()
 }
@@ -817,12 +766,23 @@ const openAddModal = () => {
 const openEditModal = (plan) => {
   isEditing.value = true
   editingId.value = plan.id
-  form.value = { ...plan }
+  form.value = {
+    subjectId: plan.subjectId,
+    taskId: plan.taskId || '',
+    title: plan.title,
+    content: plan.content,
+    studyDate: plan.studyDate,
+    startTime: plan.startTime,
+    durationMinutes: plan.durationMinutes,
+    status: plan.status,
+  }
   resetErrors()
   isModalOpen.value = true
 }
 
 const closeModal = () => {
+  if (isSaving.value) return
+
   isModalOpen.value = false
   resetErrors()
 }
@@ -849,59 +809,137 @@ const validateForm = () => {
   return valid
 }
 
-const savePlan = () => {
-  if (!validateForm()) return
+const buildPayload = () => ({
+  subject_id: Number(form.value.subjectId),
+  task_id: form.value.taskId ? Number(form.value.taskId) : null,
+  title: form.value.title.trim(),
+  content: form.value.content.trim() || null,
+  study_date: form.value.studyDate,
+  start_time: form.value.startTime || null,
+  duration_minutes: form.value.durationMinutes,
+  status: form.value.status,
+})
 
-  const planData = {
-    subjectId: form.value.subjectId,
-    taskId: form.value.taskId,
-    title: form.value.title,
-    content: form.value.content,
-    studyDate: form.value.studyDate,
-    startTime: form.value.startTime,
-    durationMinutes: form.value.durationMinutes,
-    status: form.value.status,
+const fetchSubjects = async () => {
+  try {
+    const response = await api.get('/subjects')
+    subjects.value = response.data.map(mapSubjectFromApi)
+  } catch (error) {
+    console.error('Không thể tải danh sách môn học:', error)
   }
-
-  if (isEditing.value) {
-    const index = plans.value.findIndex((plan) => plan.id === editingId.value)
-
-    plans.value[index] = {
-      ...plans.value[index],
-      ...planData,
-    }
-
-    showToast('Cập nhật kế hoạch thành công.')
-  } else {
-    plans.value.unshift({
-      id: Date.now(),
-      ...planData,
-    })
-
-    showToast('Tạo kế hoạch học thành công.')
-  }
-
-  persistPlans()
-  closeModal()
 }
 
-const changeStatus = (plan, status) => {
-  plan.status = status
-  persistPlans()
-  showToast('Cập nhật tiến độ học tập thành công.')
+const fetchTasks = async () => {
+  try {
+    const response = await api.get('/tasks')
+    tasks.value = response.data.map(mapTaskFromApi)
+  } catch (error) {
+    console.error('Không thể tải danh sách bài tập:', error)
+  }
+}
+
+const fetchPlans = async () => {
+  isLoading.value = true
+  apiError.value = ''
+
+  try {
+    const response = await api.get('/study-plans')
+    plans.value = response.data.map(mapPlanFromApi)
+  } catch (error) {
+    apiError.value = handleApiError(
+      error,
+      'Không thể tải kế hoạch học tập. Vui lòng thử lại.',
+    )
+  } finally {
+    isLoading.value = false
+  }
+}
+
+const savePlan = async () => {
+  if (!validateForm()) return
+
+  isSaving.value = true
+
+  try {
+    if (isEditing.value) {
+      const response = await api.put(
+        `/study-plans/${editingId.value}`,
+        buildPayload(),
+      )
+
+      const updatedPlan = mapPlanFromApi(response.data)
+      const index = plans.value.findIndex((plan) => plan.id === editingId.value)
+
+      if (index !== -1) {
+        plans.value[index] = updatedPlan
+      }
+
+      showToast('Cập nhật kế hoạch thành công.')
+    } else {
+      const response = await api.post('/study-plans', buildPayload())
+      plans.value.unshift(mapPlanFromApi(response.data))
+      showToast('Tạo kế hoạch học thành công.')
+    }
+
+    closeModal()
+  } catch (error) {
+    const message = handleApiError(
+      error,
+      'Không thể lưu kế hoạch. Vui lòng thử lại.',
+    )
+    showToast(message)
+  } finally {
+    isSaving.value = false
+  }
+}
+
+const changeStatus = async (plan, status) => {
+  try {
+    const response = await api.patch(`/study-plans/${plan.id}/status`, {
+      status,
+    })
+
+    const updatedPlan = mapPlanFromApi(response.data)
+    const index = plans.value.findIndex((p) => p.id === plan.id)
+
+    if (index !== -1) {
+      plans.value[index] = updatedPlan
+    }
+
+    showToast('Cập nhật tiến độ học tập thành công.')
+  } catch (error) {
+    const message = handleApiError(
+      error,
+      'Không thể cập nhật trạng thái. Vui lòng thử lại.',
+    )
+    showToast(message)
+  }
 }
 
 const confirmDelete = (plan) => {
   planToDelete.value = plan
 }
 
-const deletePlan = () => {
-  plans.value = plans.value.filter((plan) => plan.id !== planToDelete.value.id)
-
-  persistPlans()
-  planToDelete.value = null
-  showToast('Đã xóa kế hoạch học.')
+const deletePlan = async () => {
+  try {
+    await api.delete(`/study-plans/${planToDelete.value.id}`)
+    plans.value = plans.value.filter((plan) => plan.id !== planToDelete.value.id)
+    planToDelete.value = null
+    showToast('Đã xóa kế hoạch học.')
+  } catch (error) {
+    const message = handleApiError(
+      error,
+      'Không thể xóa kế hoạch. Vui lòng thử lại.',
+    )
+    showToast(message)
+  }
 }
+
+onMounted(() => {
+  fetchSubjects()
+  fetchTasks()
+  fetchPlans()
+})
 </script>
 
 <style scoped>
