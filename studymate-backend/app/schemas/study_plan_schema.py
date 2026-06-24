@@ -12,7 +12,7 @@ class StudyPlanCreate(BaseModel):
     content: str | None = None
     study_date: date
     start_time: time | None = None
-    duration_minutes: int = Field(default=60, gt=0)
+    duration_minutes: int = Field(default=60, ge=15, le=600)
     status: StudyPlanStatus = StudyPlanStatus.CHUA_THUC_HIEN
 
 
@@ -23,7 +23,7 @@ class StudyPlanUpdate(BaseModel):
     content: str | None = None
     study_date: date
     start_time: time | None = None
-    duration_minutes: int = Field(default=60, gt=0)
+    duration_minutes: int = Field(default=60, ge=15, le=600)
     status: StudyPlanStatus = StudyPlanStatus.CHUA_THUC_HIEN
 
 
@@ -46,5 +46,5 @@ class StudyPlanResponse(BaseModel):
     completed_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
-
     model_config = ConfigDict(from_attributes=True)
+

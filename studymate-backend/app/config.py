@@ -31,12 +31,18 @@ class Settings(BaseSettings):
     verification_token_expire_minutes: int = 30
 
     gemini_api_key: str = ""
+    
+    google_search_api_key: str | None = None
+    google_search_cx: str | None = None
 
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
     )
+    
+    tavily_api_key: str | None = None
+    
 
 
 settings = Settings(

@@ -5,8 +5,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models.subject import Subject
+
 from app.models.study_plan import StudyPlan, StudyPlanStatus
+from app.models.subject import Subject
 from app.models.task import Task
 from app.models.user import User
 from app.routers.auth import get_current_user
@@ -55,58 +56,62 @@ def get_subject_for_current_user(
 
 def get_task_for_current_user(
     db: Session,
-    task_id: int,
+    task_id: int | None,
     user_id: int,
 ) -> Task | None:
     if task_id is None:
         return None
 
-    task = db.scalar(
-        select(Task).where(
+    result = db.execute(
+        select(Task)
+        .join(Subject, Task.subject_id == Subject.id)
+        .where(
             Task.id == task_id,
-        )
-    )
-
-    if not task:
-        return None
-
-    subject = db.scalar(
-        select(Subject).where(
-            Subject.id == task.subject_id,
             Subject.user_id == user_id,
         )
-    )
+    ).scalar_one_or_none()
 
-    if not subject:
-        return None
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy bài tập liên quan.",
+        )
 
-    return task
+    return result
 
 
 def get_study_plan_for_current_user(
     db: Session,
     plan_id: int,
     user_id: int,
-) -> StudyPlan:
-    plan = db.scalar(
-        select(StudyPlan)
+
+) -> tuple[StudyPlan, Subject, Task | None]:
+    result = db.execute(
+        select(StudyPlan, Subject, Task)
         .join(Subject, StudyPlan.subject_id == Subject.id)
+        .outerjoin(Task, StudyPlan.task_id == Task.id)
         .where(
             StudyPlan.id == plan_id,
             Subject.user_id == user_id,
         )
-    )
 
-    if not plan:
+    ).first()
+
+    if not result:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Không tìm thấy kế hoạch học tập.",
+            detail="Không tìm thấy kế hoạch học.",
         )
 
-    return plan
+    plan, subject, task = result
+    return plan, subject, task
 
 
-def plan_to_response(plan: StudyPlan, subject: Subject, task: Task | None) -> StudyPlanResponse:
+def plan_to_response(
+    plan: StudyPlan,
+    subject: Subject,
+    task: Task | None = None,
+) -> StudyPlanResponse:
     return StudyPlanResponse(
         id=plan.id,
         subject_id=plan.subject_id,
@@ -130,33 +135,21 @@ def get_study_plans(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    plans = db.scalars(
-        select(StudyPlan)
+
+    rows = db.execute(
+        select(StudyPlan, Subject, Task)
         .join(Subject, StudyPlan.subject_id == Subject.id)
+        .outerjoin(Task, StudyPlan.task_id == Task.id)
         .where(Subject.user_id == current_user.id)
         .order_by(StudyPlan.study_date.asc(), StudyPlan.start_time.asc())
     ).all()
 
-    results = []
-    for plan in plans:
-        subject = db.get(Subject, plan.subject_id)
-        task = db.get(Task, plan.task_id) if plan.task_id else None
-        results.append(plan_to_response(plan, subject, task))
 
-    return results
+    return [
+        plan_to_response(plan, subject, task)
+        for plan, subject, task in rows
+    ]
 
-
-@router.get("/{plan_id}", response_model=StudyPlanResponse)
-def get_study_plan(
-    plan_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    plan = get_study_plan_for_current_user(db, plan_id, current_user.id)
-    subject = db.get(Subject, plan.subject_id)
-    task = db.get(Task, plan.task_id) if plan.task_id else None
-
-    return plan_to_response(plan, subject, task)
 
 
 @router.post(
@@ -175,15 +168,25 @@ def create_study_plan(
         user_id=current_user.id,
     )
 
-    task = None
-    if data.task_id:
-        task = get_task_for_current_user(
-            db=db,
-            task_id=data.task_id,
-            user_id=current_user.id,
+
+    task = get_task_for_current_user(
+        db=db,
+        task_id=data.task_id,
+        user_id=current_user.id,
+    )
+
+    if task and task.subject_id != subject.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Bài tập không thuộc môn học đã chọn.",
         )
 
-    completed_at = datetime.now() if data.status == StudyPlanStatus.DA_HOAN_THANH else None
+    completed_at = (
+        datetime.now()
+        if data.status == StudyPlanStatus.DA_HOAN_THANH
+        else None
+    )
+
 
     plan = StudyPlan(
         subject_id=subject.id,
@@ -211,7 +214,13 @@ def update_study_plan(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    plan = get_study_plan_for_current_user(db, plan_id, current_user.id)
+
+    plan, _old_subject, _old_task = get_study_plan_for_current_user(
+        db=db,
+        plan_id=plan_id,
+        user_id=current_user.id,
+    )
+
 
     subject = get_subject_for_current_user(
         db=db,
@@ -219,12 +228,17 @@ def update_study_plan(
         user_id=current_user.id,
     )
 
-    task = None
-    if data.task_id:
-        task = get_task_for_current_user(
-            db=db,
-            task_id=data.task_id,
-            user_id=current_user.id,
+
+    task = get_task_for_current_user(
+        db=db,
+        task_id=data.task_id,
+        user_id=current_user.id,
+    )
+
+    if task and task.subject_id != subject.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Bài tập không thuộc môn học đã chọn.",
         )
 
     old_status = plan.status
@@ -256,7 +270,12 @@ def update_study_plan_status(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    plan = get_study_plan_for_current_user(db, plan_id, current_user.id)
+
+    plan, subject, task = get_study_plan_for_current_user(
+        db=db,
+        plan_id=plan_id,
+        user_id=current_user.id,
+    )
 
     old_status = plan.status
     plan.status = data.status
@@ -268,10 +287,6 @@ def update_study_plan_status(
 
     db.commit()
     db.refresh(plan)
-
-    subject = db.get(Subject, plan.subject_id)
-    task = db.get(Task, plan.task_id) if plan.task_id else None
-
     return plan_to_response(plan, subject, task)
 
 
@@ -281,11 +296,17 @@ def delete_study_plan(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    plan = get_study_plan_for_current_user(db, plan_id, current_user.id)
+    plan, _subject, _task = get_study_plan_for_current_user(
+        db=db,
+        plan_id=plan_id,
+        user_id=current_user.id,
+    )
+
 
     db.delete(plan)
     db.commit()
 
     return {
-        "message": "Xóa kế hoạch học tập thành công.",
+        "message": "Xóa kế hoạch học thành công.",
     }
+

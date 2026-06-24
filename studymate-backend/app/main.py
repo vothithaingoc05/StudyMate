@@ -3,11 +3,15 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import test_database_connection
+
 from app.routers.auth import router as auth_router
 from app.routers.subjects import router as subjects_router
-
 from app.routers.tasks import router as tasks_router
+
+from app.routers.exams import router as exams_router
 from app.routers.study_plans import router as study_plans_router
+from app.routers.documents import router as documents_router
+from app.routers.chatbot import router as chatbot_router
 
 
 app = FastAPI(
@@ -27,7 +31,12 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(subjects_router)
 app.include_router(tasks_router)
+
+app.include_router(exams_router)
 app.include_router(study_plans_router)
+app.include_router(documents_router)
+app.include_router(chatbot_router)
+
 
 @app.get("/")
 def home():

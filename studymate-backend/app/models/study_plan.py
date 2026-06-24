@@ -34,6 +34,7 @@ class StudyPlan(Base):
         Integer,
         ForeignKey("tasks.id", ondelete="SET NULL"),
         nullable=True,
+        index=True,
     )
 
     title: Mapped[str] = mapped_column(
@@ -89,3 +90,4 @@ class StudyPlan(Base):
         server_default=func.current_timestamp(),
         onupdate=func.current_timestamp(),
     )
+

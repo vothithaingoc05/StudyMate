@@ -1,1542 +1,1247 @@
 <template>
-  <div class="chatbot-page">
-    <!-- Header -->
-    <div class="page-header">
-      <div>
-        <h2>Chatbot hỏi đáp</h2>
-        <p>Đặt câu hỏi dựa trên tài liệu học tập bạn đã lưu trong hệ thống.</p>
-      </div>
+	<div class="chatbot-page">
+		<div class="page-header">
+			<div>
+				<h2>Trợ lý học tập</h2>
+				<p>Hỏi đáp, tóm tắt tài liệu và tạo câu hỏi ôn tập theo môn học.</p>
+			</div>
 
-      <button class="primary-btn" @click="createNewChat">
-        <i class="bi bi-plus-lg"></i>
-        Cuộc trò chuyện mới
-      </button>
-    </div>
+			<div class="header-actions">
+				<select v-model="selectedSubjectId" class="subject-select">
+					<option value="">Chọn môn học</option>
+					<option v-for="subject in subjects" :key="subject.id" :value="String(subject.id)">
+						{{ subject.name }}
+					</option>
+				</select>
+			</div>
+		</div>
 
-    <!-- Summary -->
-    <div class="row g-4 mb-4">
-      <div class="col-xl-3 col-md-6">
-        <div class="summary-card">
-          <div class="summary-icon purple">
-            <i class="bi bi-chat-dots-fill"></i>
-          </div>
+		<div class="chat-layout">
+			<aside class="chat-sidebar">
+				<button class="mode-btn" :class="{ active: activeMode === 'ASK' }" @click="activeMode = 'ASK'">
+					<i class="bi bi-chat-dots-fill"></i>
+					<div>
+						<strong>Hỏi đáp</strong>
+						<span>Đặt câu hỏi theo tài liệu</span>
+					</div>
+				</button>
 
-          <div>
-            <p>Cuộc trò chuyện</p>
-            <h3>{{ sessions.length }}</h3>
-          </div>
-        </div>
-      </div>
+				<button class="mode-btn" :class="{ active: activeMode === 'SUMMARY' }" @click="activeMode = 'SUMMARY'">
+					<i class="bi bi-card-text"></i>
+					<div>
+						<strong>Tóm tắt</strong>
+						<span>Rút gọn nội dung cần học</span>
+					</div>
+				</button>
 
-      <div class="col-xl-3 col-md-6">
-        <div class="summary-card">
-          <div class="summary-icon blue">
-            <i class="bi bi-question-circle-fill"></i>
-          </div>
+				<button class="mode-btn" :class="{ active: activeMode === 'QUIZ' }" @click="activeMode = 'QUIZ'">
+					<i class="bi bi-ui-checks-grid"></i>
+					<div>
+						<strong>Tạo trắc nghiệm</strong>
+						<span>Luyện tập nhanh từ tài liệu</span>
+					</div>
+				</button>
 
-          <div>
-            <p>Câu hỏi đã gửi</p>
-            <h3>{{ totalQuestions }}</h3>
-          </div>
-        </div>
-      </div>
+				<button class="mode-btn" :class="{ active: activeMode === 'SEARCH' }" @click="activeMode = 'SEARCH'">
+					<i class="bi bi-search-heart-fill"></i>
+					<div>
+						<strong>Tìm tài liệu</strong>
+						<span>Gợi ý thêm nguồn học phù hợp</span>
+					</div>
+				</button>
 
-      <div class="col-xl-3 col-md-6">
-        <div class="summary-card">
-          <div class="summary-icon green">
-            <i class="bi bi-file-earmark-text-fill"></i>
-          </div>
+				<div class="subject-card">
+					<h5>Tài liệu môn học</h5>
 
-          <div>
-            <p>Tài liệu khả dụng</p>
-            <h3>{{ documents.length }}</h3>
-          </div>
-        </div>
-      </div>
+					<div v-if="selectedSubjectDocuments.length === 0" class="small-empty">
+						Chưa có tài liệu cho môn này.
+					</div>
 
-      <div class="col-xl-3 col-md-6">
-        <div class="summary-card">
-          <div class="summary-icon orange">
-            <i class="bi bi-stars"></i>
-          </div>
+					<div v-for="document in selectedSubjectDocuments.slice(0, 5)" :key="document.id"
+						class="doc-mini-item">
+						<div class="doc-mini-icon">
+							<i class="bi bi-file-earmark-text"></i>
+						</div>
 
-          <div>
-            <p>Lượt tìm nguồn</p>
-            <h3>{{ sources.length }}</h3>
-          </div>
-        </div>
-      </div>
-    </div>
+						<div>
+							<p>{{ document.title }}</p>
+							<small>{{ document.wordCount }} từ</small>
+						</div>
+					</div>
+				</div>
+			</aside>
 
-    <!-- Main Chat Layout -->
-    <div class="chat-layout">
-      <!-- History Sidebar -->
-      <aside class="history-panel">
-        <div class="history-header">
-          <h5>Lịch sử hỏi đáp</h5>
-          <button class="small-add-btn" @click="createNewChat">
-            <i class="bi bi-plus-lg"></i>
-          </button>
-        </div>
+			<main class="chat-main">
+				<div class="chat-card">
+					<div class="chat-card-header">
+						<div>
+							<h4>{{ modeTitle }}</h4>
+							<p>{{ modeDescription }}</p>
+						</div>
 
-        <div class="history-list">
-          <button
-            v-for="session in sortedSessions"
-            :key="session.id"
-            class="history-item"
-            :class="{ active: session.id === currentSessionId }"
-            @click="selectSession(session)"
-          >
-            <div class="history-icon">
-              <i class="bi bi-chat-left-text"></i>
-            </div>
+						<button class="clear-btn" @click="clearMessages">
+							<i class="bi bi-trash3"></i>
+							Xóa hội thoại
+						</button>
+					</div>
 
-            <div class="history-content">
-              <p>{{ session.title }}</p>
-              <small>
-                {{ getSubjectName(session.subjectId) }} ·
-                {{ formatShortDate(session.updatedAt) }}
-              </small>
-            </div>
+					<div ref="messagesContainer" class="messages-area">
+						<div v-if="messages.length === 0" class="welcome-box">
+							<div class="welcome-icon">
+								<i class="bi bi-stars"></i>
+							</div>
 
-            <span
-              class="delete-session"
-              title="Xóa cuộc trò chuyện"
-              @click.stop="deleteSession(session.id)"
-            >
-              <i class="bi bi-trash3"></i>
-            </span>
-          </button>
-        </div>
-      </aside>
+							<h5>Xin chào, mình có thể hỗ trợ bạn học tập.</h5>
+							<p>
+								Hãy chọn môn học, chọn chức năng và nhập yêu cầu của bạn.
+							</p>
 
-      <!-- Chat Area -->
-      <section class="chat-panel">
-        <div class="chat-header">
-          <div class="chat-title">
-            <div class="bot-avatar">
-              <i class="bi bi-robot"></i>
-            </div>
+							<div class="suggestion-list">
+								<button @click="useSuggestion('Vòng lặp for trong Python dùng để làm gì?')">
+									Vòng lặp for trong Python dùng để làm gì?
+								</button>
 
-            <div>
-              <h5>StudyMate AI</h5>
-              <p>
-                <span class="online-dot"></span>
-                Mô phỏng trả lời theo tài liệu đã lưu
-              </p>
-            </div>
-          </div>
+								<button @click="switchModeWithSuggestion('SUMMARY')">
+									Tóm tắt tài liệu môn này
+								</button>
 
-          <div class="subject-select">
-            <label>Môn học</label>
-            <select v-model="selectedSubjectId" @change="handleSubjectChange">
-              <option
-                v-for="subject in subjects"
-                :key="subject.id"
-                :value="String(subject.id)"
-              >
-                {{ subject.name }}
-              </option>
-            </select>
-          </div>
-        </div>
+								<button @click="switchModeWithSuggestion('QUIZ')">
+									Tạo 5 câu hỏi trắc nghiệm để ôn tập
+								</button>
 
-        <!-- Messages -->
-        <div ref="messageContainer" class="messages-area">
-          <div v-if="currentMessages.length === 0" class="welcome-chat">
-            <div class="welcome-icon">
-              <i class="bi bi-robot"></i>
-            </div>
+								<button @click="switchModeWithSuggestion('SEARCH')">
+									Tìm thêm tài liệu học tập cho môn này
+								</button>
+							</div>
+						</div>
 
-            <h3>Bạn muốn hỏi gì hôm nay?</h3>
-            <p>
-              Chọn môn học và nhập câu hỏi. Hệ thống sẽ tìm nội dung liên quan
-              từ tài liệu bạn đã lưu.
-            </p>
+						<div v-for="message in messages" :key="message.id" class="message-row" :class="message.role">
+							<div class="message-avatar">
+								<i class="bi" :class="message.role === 'user' ? 'bi-person-fill' : 'bi-robot'"></i>
+							</div>
 
-            <div class="suggestion-list">
-              <button
-                v-for="prompt in suggestedPrompts"
-                :key="prompt"
-                class="suggestion-btn"
-                @click="sendSuggestedQuestion(prompt)"
-              >
-                <i class="bi bi-lightbulb"></i>
-                {{ prompt }}
-              </button>
-            </div>
-          </div>
+							<div class="message-bubble">
+								<div class="message-content" v-html="formatMessage(message.content)"></div>
 
-          <div
-            v-for="message in currentMessages"
-            :key="message.id"
-            class="message-row"
-            :class="message.role === 'USER' ? 'user' : 'assistant'"
-          >
-            <div class="message-avatar">
-              <i
-                :class="
-                  message.role === 'USER'
-                    ? 'bi bi-person-fill'
-                    : 'bi bi-robot'
-                "
-              ></i>
-            </div>
+								<div v-if="message.relatedChunks?.length" class="reference-box">
+									<button class="reference-toggle"
+										@click="message.showReferences = !message.showReferences">
+										<i class="bi bi-journal-text"></i>
+										{{ message.showReferences ? 'Ẩn nội dung liên quan' : 'Xem nội dung liên quan'
+										}}
+									</button>
 
-            <div class="message-content">
-              <div class="message-bubble">
-                <p>{{ message.content }}</p>
-              </div>
+									<div v-if="message.showReferences" class="reference-list">
+										<div v-for="chunk in message.relatedChunks"
+											:key="`${chunk.document_id}-${chunk.chunk_index}`" class="reference-item">
+											<strong>{{ chunk.document_title }}</strong>
+											<p>{{ chunk.content }}</p>
+										</div>
+									</div>
+								</div>
 
-              <div class="message-meta">
-                <span>{{ formatMessageTime(message.createdAt) }}</span>
+								<div v-if="message.quiz?.length" class="quiz-list">
+									<div v-for="(question, index) in message.quiz" :key="index" class="quiz-card">
+										<h5>Câu {{ index + 1 }}: {{ question.question }}</h5>
 
-                <span v-if="message.role === 'ASSISTANT'" class="model-badge">
-                  {{ message.aiModel }}
-                </span>
-              </div>
-            </div>
-          </div>
+										<div class="quiz-options">
+											<div v-for="option in question.options" :key="option.label"
+												class="quiz-option">
+												<span>{{ option.label }}</span>
+												<p>{{ option.content }}</p>
+											</div>
+										</div>
 
-          <div v-if="isLoading" class="message-row assistant">
-            <div class="message-avatar">
-              <i class="bi bi-robot"></i>
-            </div>
+										<details>
+											<summary>Xem đáp án</summary>
+											<p>
+												<strong>Đáp án đúng:</strong>
+												{{ question.correct_answer }}
+											</p>
+											<p>{{ question.explanation }}</p>
+										</details>
+									</div>
+								</div>
 
-            <div class="typing-bubble">
-              <span></span>
-              <span></span>
-              <span></span>
-            </div>
-          </div>
-        </div>
+								<div v-if="message.recommendations?.length" class="recommendation-list">
+									<div v-for="(item, index) in message.recommendations" :key="`${item.link}-${index}`"
+										class="recommendation-card">
+										<div class="recommendation-top">
+											<div>
+												<h5>{{ item.title }}</h5>
+												<small>{{ item.display_link || 'Nguồn tài liệu' }}</small>
+											</div>
 
-        <!-- Input -->
-        <div class="chat-input-area">
-          <div class="algorithm-note">
-            <i class="bi bi-diagram-3"></i>
-            Đang mô phỏng tìm kiếm bằng TF-IDF + Cosine Similarity trên tài liệu đã lưu.
-          </div>
+											<span>{{ Math.round(item.relevance_score) }}%</span>
+										</div>
 
-          <div class="input-row">
-            <textarea
-              v-model="question"
-              rows="2"
-              placeholder="Nhập câu hỏi của bạn, ví dụ: Giải thích vòng lặp for trong Python..."
-              @keydown.enter.exact.prevent="sendQuestion"
-            ></textarea>
+										<p>{{ item.snippet }}</p>
 
-            <button
-              class="send-btn"
-              :disabled="!question.trim() || isLoading"
-              @click="sendQuestion"
-            >
-              <i class="bi bi-send-fill"></i>
-            </button>
-          </div>
-        </div>
-      </section>
+										<div v-if="item.matched_keywords?.length" class="keyword-row">
+											<span v-for="keyword in item.matched_keywords.slice(0, 5)" :key="keyword">
+												{{ keyword }}
+											</span>
+										</div>
 
-      <!-- Retrieval Sources Panel -->
-      <aside class="sources-panel">
-        <div class="sources-header">
-          <h5>Nguồn trả lời</h5>
-          <span>Chat Sources</span>
-        </div>
+										<div class="recommendation-actions">
+											<a :href="item.link" target="_blank" rel="noopener noreferrer">
+												<i class="bi bi-box-arrow-up-right"></i>
+												Xem nguồn
+											</a>
 
-        <div v-if="currentSources.length === 0" class="sources-empty">
-          <div class="source-empty-icon">
-            <i class="bi bi-search"></i>
-          </div>
+											<button @click="saveRecommendedDocument(item)">
+												<i class="bi bi-plus-circle"></i>
+												Thêm vào tài liệu học tập
+											</button>
+										</div>
+									</div>
+								</div>
 
-          <p>
-            Khi chatbot trả lời, các đoạn tài liệu liên quan sẽ xuất hiện tại đây.
-          </p>
-        </div>
+								<small class="message-time">{{ message.time }}</small>
+							</div>
+						</div>
 
-        <div v-else class="source-list">
-          <div
-            v-for="source in currentSources"
-            :key="source.id"
-            class="source-card"
-          >
-            <div class="source-top">
-              <div>
-                <span class="rank-badge">#{{ source.rankOrder }}</span>
-                <strong>{{ source.documentTitle }}</strong>
-              </div>
+						<div v-if="isLoading" class="message-row bot">
+							<div class="message-avatar">
+								<i class="bi bi-robot"></i>
+							</div>
 
-              <span class="score-badge">
-                {{ formatScore(source.similarityScore) }}%
-              </span>
-            </div>
+							<div class="message-bubble typing">
+								<span></span>
+								<span></span>
+								<span></span>
+							</div>
+						</div>
+					</div>
 
-            <p>{{ source.content }}</p>
+					<form class="input-area" @submit.prevent="submitMessage">
+						<textarea v-model.trim="userInput" rows="2" :placeholder="inputPlaceholder"
+							@keydown.enter.exact.prevent="submitMessage"></textarea>
 
-            <div class="score-progress">
-              <div
-                class="score-progress-bar"
-                :style="{ width: `${formatScore(source.similarityScore)}%` }"
-              ></div>
-            </div>
+						<button type="submit" :disabled="isLoading || !canSubmit">
+							<i class="bi bi-send-fill"></i>
+						</button>
+					</form>
+				</div>
+			</main>
+		</div>
 
-            <small>
-              <i class="bi bi-book"></i>
-              {{ getSubjectName(source.subjectId) }}
-            </small>
-          </div>
-        </div>
-
-        <!-- <div class="algorithm-card">
-          <h5>Thuật toán sử dụng</h5>
-
-          <div class="algorithm-item">
-            <i class="bi bi-1-circle-fill"></i>
-            <span>Tách câu hỏi thành từ khóa</span>
-          </div>
-
-          <div class="algorithm-item">
-            <i class="bi bi-2-circle-fill"></i>
-            <span>Biểu diễn nội dung bằng TF-IDF</span>
-          </div>
-
-          <div class="algorithm-item">
-            <i class="bi bi-3-circle-fill"></i>
-            <span>Tính Cosine Similarity</span>
-          </div>
-
-          <div class="algorithm-item">
-            <i class="bi bi-4-circle-fill"></i>
-            <span>Chọn đoạn phù hợp nhất</span>
-          </div>
-        </div> -->
-      </aside>
-    </div>
-
-    <!-- Toast -->
-    <div v-if="toastMessage" class="toast-message">
-      <i class="bi bi-check-circle-fill"></i>
-      {{ toastMessage }}
-    </div>
-  </div>
+		<div v-if="toast.message" class="toast-message" :class="toast.type">
+			<i class="bi" :class="toast.type === 'success' ? 'bi-check-circle-fill' : 'bi-exclamation-circle-fill'"></i>
+			{{ toast.message }}
+		</div>
+	</div>
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import api from '../services/api'
 
-const subjectStorageKey = 'studymate_subjects'
-const documentStorageKey = 'studymate_documents'
-const sessionStorageKey = 'studymate_chat_sessions'
-const messageStorageKey = 'studymate_chat_messages'
-const sourceStorageKey = 'studymate_chat_sources'
+const router = useRouter()
 
-const defaultSubjects = [
-  {
-    id: 1,
-    name: 'Perl & Python',
-    color: '#6366F1',
-  },
-  {
-    id: 2,
-    name: 'System Integration',
-    color: '#0891B2',
-  },
-  {
-    id: 3,
-    name: 'Cơ sở dữ liệu',
-    color: '#16A34A',
-  },
-]
-
-const defaultDocuments = [
-  {
-    id: 1,
-    subjectId: '1',
-    title: 'Vòng lặp trong Python',
-    content:
-      'Vòng lặp for trong Python dùng để duyệt qua các phần tử trong list, tuple hoặc chuỗi. Vòng lặp while tiếp tục thực hiện khi điều kiện còn đúng. Từ khóa break dùng để thoát khỏi vòng lặp.',
-    chunks: [
-      'Vòng lặp for trong Python dùng để duyệt qua các phần tử trong list, tuple hoặc chuỗi.',
-      'Vòng lặp while tiếp tục thực hiện khi điều kiện còn đúng.',
-      'Từ khóa break dùng để thoát khỏi vòng lặp.',
-    ],
-  },
-  {
-    id: 2,
-    subjectId: '1',
-    title: 'FastAPI cơ bản',
-    content:
-      'FastAPI là framework Python giúp xây dựng REST API. Trong dự án StudyMate, FastAPI nhận câu hỏi từ Vue 3, xử lý dữ liệu và gọi Gemini API để tạo câu trả lời.',
-    chunks: [
-      'FastAPI là framework Python giúp xây dựng REST API.',
-      'Trong dự án StudyMate, FastAPI nhận câu hỏi từ Vue 3, xử lý dữ liệu và gọi Gemini API để tạo câu trả lời.',
-    ],
-  },
-  {
-    id: 3,
-    subjectId: '2',
-    title: 'Mô hình tích hợp hệ thống',
-    content:
-      'Data Integration cho phép các hệ thống chia sẻ dữ liệu. Functional Integration kết nối hệ thống thông qua API hoặc message broker.',
-    chunks: [
-      'Data Integration cho phép các hệ thống chia sẻ dữ liệu.',
-      'Functional Integration kết nối hệ thống thông qua API hoặc message broker.',
-    ],
-  },
-]
-
-const loadData = (key, defaultData) => {
-  const storedData = localStorage.getItem(key)
-
-  if (storedData) {
-    return JSON.parse(storedData)
-  }
-
-  localStorage.setItem(key, JSON.stringify(defaultData))
-  return defaultData
-}
-
-const subjects = ref(loadData(subjectStorageKey, defaultSubjects))
-const documents = ref(loadData(documentStorageKey, defaultDocuments))
-const sessions = ref(loadData(sessionStorageKey, []))
-const messages = ref(loadData(messageStorageKey, []))
-const sources = ref(loadData(sourceStorageKey, []))
-
-const selectedSubjectId = ref(
-  subjects.value.length > 0 ? String(subjects.value[0].id) : '',
-)
-
-const currentSessionId = ref(null)
-const question = ref('')
+const subjects = ref([])
+const documents = ref([])
+const selectedSubjectId = ref('')
+const activeMode = ref('ASK')
+const userInput = ref('')
+const messages = ref([])
 const isLoading = ref(false)
-const toastMessage = ref('')
-const messageContainer = ref(null)
+const messagesContainer = ref(null)
 
-const sortedSessions = computed(() => {
-  return [...sessions.value].sort(
-    (first, second) =>
-      new Date(second.updatedAt).getTime() -
-      new Date(first.updatedAt).getTime(),
-  )
+const toast = ref({
+	message: '',
+	type: 'success',
 })
 
-const currentSession = computed(() => {
-  return sessions.value.find(
-    (session) => Number(session.id) === Number(currentSessionId.value),
-  )
+const modeTitle = computed(() => {
+	if (activeMode.value === 'SUMMARY') return 'Tóm tắt tài liệu'
+	if (activeMode.value === 'QUIZ') return 'Tạo câu hỏi trắc nghiệm'
+	if (activeMode.value === 'SEARCH') return 'Tìm thêm tài liệu'
+	return 'Hỏi đáp học tập'
 })
 
-const currentMessages = computed(() => {
-  return messages.value
-    .filter(
-      (message) =>
-        Number(message.sessionId) === Number(currentSessionId.value),
-    )
-    .sort(
-      (first, second) =>
-        new Date(first.createdAt).getTime() -
-        new Date(second.createdAt).getTime(),
-    )
+const modeDescription = computed(() => {
+	if (activeMode.value === 'SUMMARY') {
+		return 'Tạo bản tóm tắt ngắn gọn từ tài liệu của môn học.'
+	}
+
+	if (activeMode.value === 'QUIZ') {
+		return 'Tạo câu hỏi trắc nghiệm để bạn luyện tập và kiểm tra kiến thức.'
+	}
+
+	if (activeMode.value === 'SEARCH') {
+		return 'Tìm thêm tài liệu học tập phù hợp với môn học bạn đang chọn.'
+	}
+
+	return 'Đặt câu hỏi và nhận câu trả lời dựa trên tài liệu học tập đã lưu.'
 })
 
-const lastAssistantMessage = computed(() => {
-  return [...currentMessages.value]
-    .reverse()
-    .find((message) => message.role === 'ASSISTANT')
+const inputPlaceholder = computed(() => {
+	if (activeMode.value === 'SUMMARY') {
+		return 'Ví dụ: Tóm tắt tài liệu môn này thành các ý chính...'
+	}
+
+	if (activeMode.value === 'QUIZ') {
+		return 'Ví dụ: Tạo 5 câu hỏi trắc nghiệm từ tài liệu môn này...'
+	}
+
+	if (activeMode.value === 'SEARCH') {
+		return 'Ví dụ: Tìm thêm tài liệu về FastAPI, vòng lặp Python, REST API...'
+	}
+
+	return 'Nhập câu hỏi của bạn...'
 })
 
-const currentSources = computed(() => {
-  if (!lastAssistantMessage.value) {
-    return []
-  }
+const selectedSubjectDocuments = computed(() => {
+	if (!selectedSubjectId.value) return []
 
-  return sources.value
-    .filter(
-      (source) =>
-        Number(source.assistantMessageId) ===
-        Number(lastAssistantMessage.value.id),
-    )
-    .sort((first, second) => first.rankOrder - second.rankOrder)
+	return documents.value.filter(
+		(document) => String(document.subjectId) === String(selectedSubjectId.value),
+	)
 })
 
-const totalQuestions = computed(() => {
-  return messages.value.filter((message) => message.role === 'USER').length
+const canSubmit = computed(() => {
+	return Boolean(selectedSubjectId.value && userInput.value.trim())
 })
 
-const suggestedPrompts = computed(() => {
-  const subjectName = getSubjectName(selectedSubjectId.value)
-
-  if (subjectName === 'Perl & Python') {
-    return [
-      'Giải thích vòng lặp for trong Python',
-      'FastAPI dùng để làm gì trong dự án?',
-      'Sự khác nhau giữa for và while là gì?',
-    ]
-  }
-
-  if (subjectName === 'System Integration') {
-    return [
-      'Data Integration là gì?',
-      'Functional Integration hoạt động như thế nào?',
-      'API có vai trò gì trong tích hợp hệ thống?',
-    ]
-  }
-
-  return [
-    'Giải thích nội dung quan trọng của môn học',
-    'Cho mình biết nội dung cần ưu tiên ôn',
-    'Tài liệu này nói về vấn đề gì?',
-  ]
+const selectedSubject = computed(() => {
+	return subjects.value.find(
+		(subject) => String(subject.id) === String(selectedSubjectId.value),
+	)
 })
 
-const persistChatData = () => {
-  localStorage.setItem(sessionStorageKey, JSON.stringify(sessions.value))
-  localStorage.setItem(messageStorageKey, JSON.stringify(messages.value))
-  localStorage.setItem(sourceStorageKey, JSON.stringify(sources.value))
+const mapSubjectFromApi = (subject) => ({
+	id: subject.id,
+	name: subject.name,
+})
+
+const mapDocumentFromApi = (document) => ({
+	id: document.id,
+	subjectId: document.subject_id,
+	title: document.title,
+	content: document.content || '',
+	wordCount: document.word_count || 0,
+})
+
+const showToast = (message, type = 'success') => {
+	toast.value = { message, type }
+
+	setTimeout(() => {
+		toast.value.message = ''
+	}, 2600)
 }
 
-const getSubjectName = (subjectId) => {
-  const subject = subjects.value.find(
-    (item) => String(item.id) === String(subjectId),
-  )
+const handleApiError = (error, fallbackMessage) => {
+	if (error.response?.status === 401) {
+		router.push('/dang-nhap')
+		return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.'
+	}
 
-  return subject ? subject.name : 'Không xác định'
+	return error.response?.data?.detail || fallbackMessage
 }
 
-const formatShortDate = (dateValue) => {
-  return new Date(dateValue).toLocaleDateString('vi-VN', {
-    day: '2-digit',
-    month: '2-digit',
-  })
+const loadData = async () => {
+	try {
+		const [subjectsResponse, documentsResponse] = await Promise.all([
+			api.get('/subjects'),
+			api.get('/documents'),
+		])
+
+		subjects.value = subjectsResponse.data.map(mapSubjectFromApi)
+		documents.value = documentsResponse.data.map(mapDocumentFromApi)
+
+		if (!selectedSubjectId.value && subjects.value.length > 0) {
+			selectedSubjectId.value = String(subjects.value[0].id)
+		}
+	} catch (error) {
+		showToast(
+			handleApiError(error, 'Không thể tải dữ liệu. Vui lòng thử lại.'),
+			'error',
+		)
+	}
 }
 
-const formatMessageTime = (dateValue) => {
-  return new Date(dateValue).toLocaleString('vi-VN', {
-    hour: '2-digit',
-    minute: '2-digit',
-    day: '2-digit',
-    month: '2-digit',
-  })
-}
+const addMessage = (role, content, extra = {}) => {
+	messages.value.push({
+		id: Date.now() + Math.random(),
+		role,
+		content,
+		time: new Date().toLocaleTimeString('vi-VN', {
+			hour: '2-digit',
+			minute: '2-digit',
+		}),
+		showReferences: false,
+		...extra,
+	})
 
-const formatScore = (score) => {
-  return Math.round(Number(score) * 100)
-}
-
-const showToast = (message) => {
-  toastMessage.value = message
-
-  setTimeout(() => {
-    toastMessage.value = ''
-  }, 2400)
+	scrollToBottom()
 }
 
 const scrollToBottom = async () => {
-  await nextTick()
+	await nextTick()
 
-  if (messageContainer.value) {
-    messageContainer.value.scrollTop = messageContainer.value.scrollHeight
-  }
+	if (messagesContainer.value) {
+		messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+	}
 }
 
-const createNewChat = () => {
-  const newSession = {
-    id: Date.now(),
-    subjectId: selectedSubjectId.value,
-    title: 'Cuộc trò chuyện mới',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  }
-
-  sessions.value.unshift(newSession)
-  currentSessionId.value = newSession.id
-  question.value = ''
-
-  persistChatData()
+const clearMessages = () => {
+	messages.value = []
 }
 
-const selectSession = (session) => {
-  currentSessionId.value = session.id
-  selectedSubjectId.value = String(session.subjectId)
-  scrollToBottom()
+const useSuggestion = (text) => {
+	activeMode.value = 'ASK'
+	userInput.value = text
 }
 
-const deleteSession = (sessionId) => {
-  const messageIds = messages.value
-    .filter((message) => Number(message.sessionId) === Number(sessionId))
-    .map((message) => message.id)
+const switchModeWithSuggestion = (mode) => {
+	activeMode.value = mode
 
-  sessions.value = sessions.value.filter(
-    (session) => Number(session.id) !== Number(sessionId),
-  )
+	if (mode === 'SUMMARY') {
+		userInput.value = 'Tóm tắt tài liệu môn này thành các ý chính.'
+	}
 
-  messages.value = messages.value.filter(
-    (message) => Number(message.sessionId) !== Number(sessionId),
-  )
+	if (mode === 'QUIZ') {
+		userInput.value = 'Tạo 5 câu hỏi trắc nghiệm để ôn tập.'
+	}
 
-  sources.value = sources.value.filter(
-    (source) => !messageIds.includes(source.assistantMessageId),
-  )
-
-  if (Number(currentSessionId.value) === Number(sessionId)) {
-    if (sessions.value.length > 0) {
-      selectSession(sessions.value[0])
-    } else {
-      createNewChat()
-    }
-  }
-
-  persistChatData()
-  showToast('Đã xóa cuộc trò chuyện.')
+	if (mode === 'SEARCH') {
+		userInput.value = 'Tìm thêm tài liệu học tập phù hợp cho môn này.'
+	}
 }
 
-const handleSubjectChange = () => {
-  if (!currentSession.value) {
-    createNewChat()
-    return
-  }
+const submitMessage = async () => {
+	if (!selectedSubjectId.value) {
+		showToast('Vui lòng chọn môn học trước.', 'error')
+		return
+	}
 
-  if (currentMessages.value.length > 0) {
-    createNewChat()
-    return
-  }
+	if (!userInput.value.trim()) {
+		return
+	}
 
-  currentSession.value.subjectId = selectedSubjectId.value
-  currentSession.value.updatedAt = new Date().toISOString()
-  persistChatData()
+	if (activeMode.value !== 'SEARCH' && selectedSubjectDocuments.value.length === 0) {
+		showToast('Môn học này chưa có tài liệu. Vui lòng thêm tài liệu trước.', 'error')
+		return
+	}
+
+	const currentInput = userInput.value.trim()
+	addMessage('user', currentInput)
+	userInput.value = ''
+	isLoading.value = true
+
+	try {
+		if (activeMode.value === 'ASK') {
+			await askQuestion(currentInput)
+		}
+
+		if (activeMode.value === 'SUMMARY') {
+			await summarizeDocuments()
+		}
+
+		if (activeMode.value === 'QUIZ') {
+			await generateQuiz()
+		}
+
+		if (activeMode.value === 'SEARCH') {
+			await searchDocuments(currentInput)
+		}
+	} catch (error) {
+		addMessage(
+			'bot',
+			handleApiError(error, 'Mình chưa thể xử lý yêu cầu này. Bạn thử lại nhé.'),
+		)
+	} finally {
+		isLoading.value = false
+	}
 }
 
-const normalizeText = (text) => {
-  return text
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/đ/g, 'd')
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .split(/\s+/)
-    .filter((word) => word.length > 1)
+const askQuestion = async (question) => {
+	const response = await api.post('/chatbot/ask', {
+		subject_id: Number(selectedSubjectId.value),
+		question,
+		top_k: 3,
+	})
+
+	addMessage('bot', response.data.answer, {
+		relatedChunks: response.data.related_chunks || [],
+	})
 }
 
-const getDocumentChunks = (subjectId) => {
-  const subjectDocuments = documents.value.filter(
-    (document) => String(document.subjectId) === String(subjectId),
-  )
+const summarizeDocuments = async () => {
+	const response = await api.post('/chatbot/summarize', {
+		subject_id: Number(selectedSubjectId.value),
+		document_id: null,
+		max_sentences: 5,
+	})
 
-  const chunks = []
+	const keywords = response.data.important_keywords || []
 
-  subjectDocuments.forEach((document) => {
-    const documentChunks =
-      document.chunks && document.chunks.length > 0
-        ? document.chunks
-        : [document.content]
+	let content = `Mình đã tóm tắt tài liệu môn ${response.data.subject_name}:\n\n${response.data.summary}`
 
-    documentChunks.forEach((chunk, index) => {
-      chunks.push({
-        id: `${document.id}-${index + 1}`,
-        documentId: document.id,
-        documentTitle: document.title,
-        subjectId: document.subjectId,
-        content: chunk,
-      })
-    })
-  })
+	if (keywords.length > 0) {
+		content += `\n\nMột số ý chính cần chú ý:\n${keywords
+			.slice(0, 8)
+			.map((keyword) => `- ${keyword}`)
+			.join('\n')}`
+	}
 
-  return chunks
+	addMessage('bot', content)
 }
 
-const calculateSimilarityResults = (inputQuestion, subjectId) => {
-  const chunks = getDocumentChunks(subjectId)
+const generateQuiz = async () => {
+	const response = await api.post('/chatbot/generate-quiz', {
+		subject_id: Number(selectedSubjectId.value),
+		document_id: null,
+		number_of_questions: 5,
+	})
 
-  if (chunks.length === 0) {
-    return []
-  }
+	const questions = response.data.questions || []
 
-  const questionTokens = normalizeText(inputQuestion)
-  const tokenizedChunks = chunks.map((chunk) => normalizeText(chunk.content))
-  const vocabulary = [...new Set(questionTokens)]
+	if (questions.length === 0) {
+		addMessage(
+			'bot',
+			'Mình chưa tạo được câu hỏi từ tài liệu hiện tại. Bạn có thể bổ sung thêm nội dung chi tiết hơn cho môn học này.',
+		)
+		return
+	}
 
-  const totalDocuments = tokenizedChunks.length
-
-  const calculateVector = (tokens) => {
-    return vocabulary.map((term) => {
-      const termFrequency =
-        tokens.filter((token) => token === term).length /
-        Math.max(tokens.length, 1)
-
-      const documentFrequency = tokenizedChunks.filter((chunkTokens) =>
-        chunkTokens.includes(term),
-      ).length
-
-      const inverseDocumentFrequency =
-        Math.log((totalDocuments + 1) / (documentFrequency + 1)) + 1
-
-      return termFrequency * inverseDocumentFrequency
-    })
-  }
-
-  const cosineSimilarity = (firstVector, secondVector) => {
-    const dotProduct = firstVector.reduce(
-      (total, value, index) => total + value * secondVector[index],
-      0,
-    )
-
-    const firstMagnitude = Math.sqrt(
-      firstVector.reduce((total, value) => total + value * value, 0),
-    )
-
-    const secondMagnitude = Math.sqrt(
-      secondVector.reduce((total, value) => total + value * value, 0),
-    )
-
-    if (firstMagnitude === 0 || secondMagnitude === 0) {
-      return 0
-    }
-
-    return dotProduct / (firstMagnitude * secondMagnitude)
-  }
-
-  const questionVector = calculateVector(questionTokens)
-
-  return chunks
-    .map((chunk, index) => {
-      const chunkVector = calculateVector(tokenizedChunks[index])
-
-      return {
-        ...chunk,
-        similarityScore: cosineSimilarity(questionVector, chunkVector),
-      }
-    })
-    .filter((chunk) => chunk.similarityScore > 0)
-    .sort(
-      (first, second) =>
-        second.similarityScore - first.similarityScore,
-    )
-    .slice(0, 3)
+	addMessage('bot', 'Mình đã tạo bộ câu hỏi trắc nghiệm để bạn ôn tập:', {
+		quiz: questions,
+	})
 }
 
-const generateDemoAnswer = (inputQuestion, retrievedSources) => {
-  if (retrievedSources.length === 0) {
-    return (
-      'Mình chưa tìm thấy đoạn tài liệu phù hợp với câu hỏi này trong môn học đã chọn. ' +
-      'Bạn hãy thêm tài liệu liên quan hoặc thử đặt câu hỏi bằng từ khóa cụ thể hơn.'
-    )
-  }
+const searchDocuments = async (topic) => {
+	const response = await api.post('/chatbot/search-documents', {
+		subject_id: Number(selectedSubjectId.value),
+		topic,
+		max_results: 5,
+	})
 
-  const bestSource = retrievedSources[0]
+	const results = response.data.results || []
 
-  let answer =
-    `Dựa trên tài liệu "${bestSource.documentTitle}", nội dung liên quan nhất là: ` +
-    `${bestSource.content}`
+	if (results.length === 0) {
+		addMessage(
+			'bot',
+			'Mình chưa tìm thấy tài liệu phù hợp. Bạn thử nhập chủ đề cụ thể hơn nhé.',
+		)
+		return
+	}
 
-  if (retrievedSources.length > 1) {
-    answer +=
-      ' Ngoài ra, hệ thống cũng tìm thấy thêm các đoạn nội dung liên quan ở phần nguồn tham khảo bên phải.'
-  }
-
-  answer +=
-    ' Hiện tại đây là câu trả lời mô phỏng theo tài liệu; khi kết nối backend, Gemini sẽ diễn giải chi tiết và tự nhiên hơn.'
-
-  return answer
+	addMessage('bot', 'Mình tìm được một số tài liệu có thể hữu ích cho bạn:', {
+		recommendations: results,
+	})
 }
 
-const sendSuggestedQuestion = (prompt) => {
-  question.value = prompt
-  sendQuestion()
+const saveRecommendedDocument = async (item) => {
+	if (!selectedSubjectId.value) {
+		showToast('Vui lòng chọn môn học trước.', 'error')
+		return
+	}
+
+	try {
+		await api.post('/chatbot/save-recommended-document', {
+			subject_id: Number(selectedSubjectId.value),
+			title: item.title,
+			snippet: item.snippet,
+			link: item.link,
+			content: `${item.title}\n\n${item.snippet}\n\nNguồn: ${item.link}`,
+			keywords: item.matched_keywords || [],
+			relevance_score: item.relevance_score || null,
+		})
+
+		showToast('Đã thêm tài liệu vào kho học tập.')
+		await loadData()
+	} catch (error) {
+		showToast(
+			handleApiError(error, 'Không thể thêm tài liệu. Vui lòng thử lại.'),
+			'error',
+		)
+	}
 }
 
-const sendQuestion = async () => {
-  const inputQuestion = question.value.trim()
+const formatMessage = (content) => {
+	if (!content) return ''
 
-  if (!inputQuestion || isLoading.value) {
-    return
-  }
-
-  if (!currentSession.value) {
-    createNewChat()
-  }
-
-  const session = currentSession.value
-  const userMessageId = Date.now()
-
-  messages.value.push({
-    id: userMessageId,
-    sessionId: session.id,
-    role: 'USER',
-    content: inputQuestion,
-    aiModel: null,
-    createdAt: new Date().toISOString(),
-  })
-
-  const userQuestionsInSession = messages.value.filter(
-    (message) =>
-      Number(message.sessionId) === Number(session.id) &&
-      message.role === 'USER',
-  )
-
-  if (userQuestionsInSession.length === 1) {
-    session.title =
-      inputQuestion.length > 34
-        ? `${inputQuestion.slice(0, 34)}...`
-        : inputQuestion
-  }
-
-  session.subjectId = selectedSubjectId.value
-  session.updatedAt = new Date().toISOString()
-
-  question.value = ''
-  isLoading.value = true
-  persistChatData()
-  await scrollToBottom()
-
-  const retrievedSources = calculateSimilarityResults(
-    inputQuestion,
-    selectedSubjectId.value,
-  )
-
-  setTimeout(async () => {
-    const assistantMessageId = Date.now() + 1
-
-    messages.value.push({
-      id: assistantMessageId,
-      sessionId: session.id,
-      role: 'ASSISTANT',
-      content: generateDemoAnswer(inputQuestion, retrievedSources),
-      aiModel: 'Demo Retrieval',
-      createdAt: new Date().toISOString(),
-    })
-
-    sources.value = sources.value.filter(
-      (source) =>
-        Number(source.assistantMessageId) !== Number(assistantMessageId),
-    )
-
-    retrievedSources.forEach((source, index) => {
-      sources.value.push({
-        id: `${assistantMessageId}-${index + 1}`,
-        assistantMessageId,
-        documentId: source.documentId,
-        documentTitle: source.documentTitle,
-        subjectId: source.subjectId,
-        content: source.content,
-        similarityScore: source.similarityScore,
-        rankOrder: index + 1,
-      })
-    })
-
-    session.updatedAt = new Date().toISOString()
-    isLoading.value = false
-    persistChatData()
-
-    await scrollToBottom()
-  }, 750)
+	return content
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;')
+		.replace(/\n/g, '<br />')
 }
+
+watch(activeMode, () => {
+	userInput.value = ''
+})
 
 onMounted(() => {
-  if (sessions.value.length === 0) {
-    createNewChat()
-  } else {
-    selectSession(sortedSessions.value[0])
-  }
+	loadData()
 })
 </script>
 
 <style scoped>
+.chatbot-page {
+	position: relative;
+}
+
 .page-header {
-  margin-bottom: 25px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+	margin-bottom: 25px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 18px;
 }
 
 .page-header h2 {
-  margin: 0 0 7px;
-  color: #111827;
-  font-size: 27px;
-  font-weight: 700;
+	margin: 0 0 7px;
+	color: var(--sm-text);
+	font-size: 27px;
+	font-weight: 700;
 }
 
 .page-header p {
-  margin: 0;
-  color: #6b7280;
+	margin: 0;
+	color: var(--sm-text-soft);
 }
 
-.primary-btn {
-  height: 47px;
-  padding: 0 20px;
-  border: none;
-  border-radius: 12px;
-  color: white;
-  background: #6366f1;
-  font-weight: 600;
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  transition: 0.2s;
+.subject-select {
+	min-width: 230px;
+	height: 45px;
+	padding: 0 14px;
+	border: 1px solid var(--sm-border);
+	border-radius: 12px;
+	color: var(--sm-text);
+	background: #fffdfa;
+	outline: none;
 }
 
-.primary-btn:hover {
-  background: #4f46e5;
-}
-
-.summary-card {
-  height: 104px;
-  padding: 20px;
-  border-radius: 18px;
-  border: 1px solid #edf0f5;
-  background: white;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.summary-icon {
-  width: 53px;
-  height: 53px;
-  border-radius: 14px;
-  font-size: 24px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.summary-icon.purple {
-  color: #6366f1;
-  background: #eef2ff;
-}
-
-.summary-icon.blue {
-  color: #2563eb;
-  background: #eff6ff;
-}
-
-.summary-icon.green {
-  color: #16a34a;
-  background: #f0fdf4;
-}
-
-.summary-icon.orange {
-  color: #f97316;
-  background: #fff7ed;
-}
-
-.summary-card p {
-  margin: 0 0 5px;
-  color: #6b7280;
-  font-size: 14px;
-}
-
-.summary-card h3 {
-  margin: 0;
-  font-size: 27px;
-  font-weight: 700;
+.subject-select:focus {
+	border-color: var(--sm-primary);
+	box-shadow: 0 0 0 3px var(--sm-primary-soft);
 }
 
 .chat-layout {
-  height: calc(100vh - 330px);
-  min-height: 620px;
-  display: grid;
-  grid-template-columns: 260px minmax(420px, 1fr) 300px;
-  gap: 18px;
+	display: grid;
+	grid-template-columns: 310px 1fr;
+	gap: 22px;
 }
 
-.history-panel,
-.chat-panel,
-.sources-panel {
-  border: 1px solid #edf0f5;
-  border-radius: 19px;
-  background: white;
-  overflow: hidden;
+.chat-sidebar {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
 }
 
-.history-panel {
-  padding: 17px 12px;
+.mode-btn {
+	width: 100%;
+	padding: 17px;
+	border: 1px solid var(--sm-border);
+	border-radius: 17px;
+	color: var(--sm-text);
+	background: var(--sm-card);
+	box-shadow: var(--sm-shadow-sm);
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	text-align: left;
 }
 
-.history-header {
-  padding: 0 7px 14px;
-  border-bottom: 1px solid #f1f5f9;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+.mode-btn i {
+	width: 44px;
+	height: 44px;
+	flex-shrink: 0;
+	border-radius: 13px;
+	color: var(--sm-primary);
+	background: var(--sm-primary-soft);
+	font-size: 22px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
 }
 
-.history-header h5 {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 700;
+.mode-btn strong {
+	display: block;
+	margin-bottom: 4px;
+	font-size: 15px;
 }
 
-.small-add-btn {
-  width: 34px;
-  height: 34px;
-  border: none;
-  border-radius: 9px;
-  color: #6366f1;
-  background: #eef2ff;
+.mode-btn span {
+	color: var(--sm-text-soft);
+	font-size: 13px;
 }
 
-.history-list {
-  padding-top: 13px;
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
+.mode-btn.active {
+	border-color: var(--sm-primary);
+	background: linear-gradient(135deg, #fffaf4, var(--sm-accent-soft));
 }
 
-.history-item {
-  width: 100%;
-  padding: 11px 8px;
-  border: none;
-  border-radius: 12px;
-  background: transparent;
-  text-align: left;
-  display: flex;
-  align-items: center;
-  gap: 9px;
+.mode-btn.active i {
+	color: white;
+	background: linear-gradient(135deg, var(--sm-primary), var(--sm-accent));
 }
 
-.history-item:hover,
-.history-item.active {
-  background: #eef2ff;
+.subject-card {
+	margin-top: 6px;
+	padding: 20px;
+	border: 1px solid var(--sm-border);
+	border-radius: 18px;
+	background: var(--sm-card);
+	box-shadow: var(--sm-shadow-sm);
 }
 
-.history-icon {
-  width: 33px;
-  height: 33px;
-  flex-shrink: 0;
-  border-radius: 9px;
-  color: #6366f1;
-  background: #f5f3ff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.subject-card h5 {
+	margin: 0 0 15px;
+	color: var(--sm-text);
+	font-weight: 700;
 }
 
-.history-content {
-  min-width: 0;
-  flex: 1;
+.small-empty {
+	color: var(--sm-text-soft);
+	font-size: 14px;
 }
 
-.history-content p {
-  margin: 0 0 4px;
-  color: #111827;
-  font-size: 13px;
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.doc-mini-item {
+	padding: 12px 0;
+	border-bottom: 1px solid #f2e8dd;
+	display: flex;
+	align-items: center;
+	gap: 12px;
 }
 
-.history-content small {
-  color: #6b7280;
-  font-size: 11px;
+.doc-mini-item:last-child {
+	border-bottom: none;
 }
 
-.delete-session {
-  display: none;
-  color: #dc2626;
+.doc-mini-icon {
+	width: 38px;
+	height: 38px;
+	border-radius: 11px;
+	color: var(--sm-primary);
+	background: var(--sm-primary-soft);
+	display: flex;
+	align-items: center;
+	justify-content: center;
 }
 
-.history-item:hover .delete-session {
-  display: block;
+.doc-mini-item p {
+	margin: 0 0 3px;
+	color: var(--sm-text);
+	font-size: 14px;
+	font-weight: 600;
 }
 
-.chat-panel {
-  display: flex;
-  flex-direction: column;
+.doc-mini-item small {
+	color: var(--sm-text-soft);
 }
 
-.chat-header {
-  height: 76px;
-  padding: 13px 19px;
-  border-bottom: 1px solid #edf0f5;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
+.chat-card {
+	height: calc(100vh - 175px);
+	min-height: 650px;
+	border: 1px solid var(--sm-border);
+	border-radius: 22px;
+	background: var(--sm-card);
+	box-shadow: var(--sm-shadow-sm);
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
 }
 
-.chat-title {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+.chat-card-header {
+	padding: 21px 24px;
+	border-bottom: 1px solid var(--sm-border);
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
 }
 
-.bot-avatar {
-  width: 47px;
-  height: 47px;
-  border-radius: 14px;
-  color: white;
-  background: #6366f1;
-  font-size: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.chat-card-header h4 {
+	margin: 0 0 5px;
+	color: var(--sm-text);
+	font-weight: 700;
 }
 
-.chat-title h5 {
-  margin: 0 0 4px;
-  font-weight: 700;
+.chat-card-header p {
+	margin: 0;
+	color: var(--sm-text-soft);
+	font-size: 14px;
 }
 
-.chat-title p {
-  margin: 0;
-  color: #6b7280;
-  font-size: 12px;
-}
-
-.online-dot {
-  display: inline-block;
-  width: 7px;
-  height: 7px;
-  margin-right: 4px;
-  border-radius: 50%;
-  background: #16a34a;
-}
-
-.subject-select label {
-  display: block;
-  margin-bottom: 4px;
-  color: #6b7280;
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.subject-select select {
-  min-width: 170px;
-  height: 39px;
-  padding: 0 10px;
-  border: 1px solid #e5e7eb;
-  border-radius: 9px;
-  color: #374151;
-  background: white;
+.clear-btn {
+	height: 39px;
+	padding: 0 13px;
+	border: 1px solid var(--sm-border);
+	border-radius: 10px;
+	color: var(--sm-text-soft);
+	background: #fffdfa;
+	font-size: 13px;
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
 }
 
 .messages-area {
-  flex: 1;
-  padding: 22px;
-  background: #f9fafc;
-  overflow-y: auto;
+	flex: 1;
+	padding: 24px;
+	overflow-y: auto;
+	background:
+		radial-gradient(circle at 12% 0%, rgba(217, 174, 118, 0.12), transparent 24%),
+		#fffaf4;
 }
 
-.welcome-chat {
-  max-width: 570px;
-  margin: 48px auto 0;
-  text-align: center;
+.welcome-box {
+	max-width: 520px;
+	margin: 70px auto;
+	padding: 30px;
+	border: 1px solid var(--sm-border);
+	border-radius: 22px;
+	background: rgba(255, 253, 250, 0.88);
+	text-align: center;
 }
 
 .welcome-icon {
-  width: 67px;
-  height: 67px;
-  margin: 0 auto 17px;
-  border-radius: 20px;
-  color: #6366f1;
-  background: #eef2ff;
-  font-size: 33px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+	width: 70px;
+	height: 70px;
+	margin: 0 auto 18px;
+	border-radius: 50%;
+	color: white;
+	background: linear-gradient(135deg, var(--sm-primary), var(--sm-accent));
+	font-size: 32px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
 }
 
-.welcome-chat h3 {
-  margin: 0 0 9px;
-  font-size: 22px;
-  font-weight: 700;
+.welcome-box h5 {
+	margin: 0 0 9px;
+	color: var(--sm-text);
+	font-weight: 700;
 }
 
-.welcome-chat p {
-  margin: 0 auto 24px;
-  max-width: 470px;
-  color: #6b7280;
-  line-height: 1.6;
+.welcome-box p {
+	margin: 0 0 18px;
+	color: var(--sm-text-soft);
 }
 
 .suggestion-list {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
+	display: flex;
+	flex-direction: column;
+	gap: 9px;
 }
 
-.suggestion-btn {
-  padding: 13px 15px;
-  border: 1px solid #e0e7ff;
-  border-radius: 12px;
-  color: #374151;
-  background: white;
-  text-align: left;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-}
-
-.suggestion-btn i {
-  color: #6366f1;
-}
-
-.suggestion-btn:hover {
-  border-color: #6366f1;
-  background: #f8faff;
+.suggestion-list button {
+	padding: 11px 14px;
+	border: 1px solid var(--sm-border);
+	border-radius: 12px;
+	color: var(--sm-text);
+	background: #fffdfa;
+	text-align: left;
 }
 
 .message-row {
-  margin-bottom: 19px;
-  display: flex;
-  gap: 11px;
+	margin-bottom: 18px;
+	display: flex;
+	align-items: flex-start;
+	gap: 12px;
 }
 
 .message-row.user {
-  flex-direction: row-reverse;
+	flex-direction: row-reverse;
 }
 
 .message-avatar {
-  width: 39px;
-  height: 39px;
-  flex-shrink: 0;
-  border-radius: 12px;
-  color: white;
-  background: #6366f1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+	width: 39px;
+	height: 39px;
+	flex-shrink: 0;
+	border-radius: 50%;
+	color: white;
+	background: linear-gradient(135deg, var(--sm-primary), var(--sm-accent));
+	display: flex;
+	align-items: center;
+	justify-content: center;
 }
 
-.message-row.user .message-avatar {
-  background: #111827;
-}
-
-.message-content {
-  max-width: 75%;
+.message-row.bot .message-avatar {
+	background: #3b2f2a;
 }
 
 .message-bubble {
-  padding: 13px 16px;
-  border-radius: 15px;
-  color: #111827;
-  background: white;
-  border: 1px solid #edf0f5;
+	max-width: 76%;
+	padding: 15px 17px;
+	border-radius: 17px;
+	color: var(--sm-text);
+	background: #fffdfa;
+	box-shadow: 0 8px 22px rgba(83, 56, 36, 0.08);
 }
 
 .message-row.user .message-bubble {
-  color: white;
-  background: #6366f1;
-  border-color: #6366f1;
+	color: white;
+	background: linear-gradient(135deg, var(--sm-primary), var(--sm-accent));
 }
 
-.message-bubble p {
-  margin: 0;
-  line-height: 1.65;
-  white-space: pre-wrap;
+.message-content {
+	line-height: 1.7;
+	font-size: 14px;
 }
 
-.message-meta {
-  margin-top: 6px;
-  color: #9ca3af;
-  font-size: 11px;
-  display: flex;
-  gap: 7px;
-  align-items: center;
+.message-time {
+	display: block;
+	margin-top: 9px;
+	color: rgba(48, 40, 33, 0.5);
+	font-size: 11px;
 }
 
-.message-row.user .message-meta {
-  justify-content: flex-end;
+.message-row.user .message-time {
+	color: rgba(255, 255, 255, 0.75);
 }
 
-.model-badge {
-  padding: 3px 8px;
-  border-radius: 14px;
-  color: #4338ca;
-  background: #eef2ff;
-  font-weight: 600;
+.reference-box {
+	margin-top: 14px;
 }
 
-.typing-bubble {
-  height: 44px;
-  padding: 0 16px;
-  border-radius: 15px;
-  border: 1px solid #edf0f5;
-  background: white;
-  display: flex;
-  align-items: center;
-  gap: 5px;
+.reference-toggle {
+	padding: 8px 11px;
+	border: 1px solid var(--sm-border);
+	border-radius: 10px;
+	color: var(--sm-primary-dark);
+	background: var(--sm-primary-soft);
+	font-size: 13px;
+	font-weight: 600;
 }
 
-.typing-bubble span {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #9ca3af;
-  animation: typing 1s infinite;
+.reference-list {
+	margin-top: 10px;
+	display: flex;
+	flex-direction: column;
+	gap: 9px;
 }
 
-.typing-bubble span:nth-child(2) {
-  animation-delay: 0.15s;
+.reference-item {
+	padding: 12px;
+	border-radius: 11px;
+	background: var(--sm-accent-soft);
 }
 
-.typing-bubble span:nth-child(3) {
-  animation-delay: 0.3s;
+.reference-item strong {
+	color: var(--sm-text);
+	font-size: 13px;
 }
 
-@keyframes typing {
-  0%, 100% {
-    opacity: 0.4;
-    transform: translateY(0);
-  }
-
-  50% {
-    opacity: 1;
-    transform: translateY(-3px);
-  }
+.reference-item p {
+	margin: 6px 0 0;
+	color: var(--sm-text-soft);
+	font-size: 13px;
+	line-height: 1.6;
 }
 
-.chat-input-area {
-  padding: 15px 18px 17px;
-  border-top: 1px solid #edf0f5;
-  background: white;
+.quiz-list {
+	margin-top: 14px;
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
 }
 
-.algorithm-note {
-  margin-bottom: 10px;
-  color: #6366f1;
-  font-size: 12px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
+.quiz-card {
+	padding: 15px;
+	border: 1px solid var(--sm-border);
+	border-radius: 14px;
+	background: #fffaf4;
 }
 
-.input-row {
-  display: flex;
-  align-items: flex-end;
-  gap: 11px;
+.quiz-card h5 {
+	margin: 0 0 12px;
+	color: var(--sm-text);
+	font-size: 15px;
+	font-weight: 700;
+	line-height: 1.5;
 }
 
-.input-row textarea {
-  flex: 1;
-  min-height: 53px;
-  max-height: 120px;
-  padding: 14px;
-  border: 1px solid #e5e7eb;
-  border-radius: 13px;
-  outline: none;
-  resize: none;
+.quiz-options {
+	display: grid;
+	gap: 8px;
 }
 
-.input-row textarea:focus {
-  border-color: #6366f1;
+.quiz-option {
+	padding: 9px 10px;
+	border-radius: 10px;
+	background: #fffdfa;
+	display: flex;
+	align-items: center;
+	gap: 9px;
 }
 
-.send-btn {
-  width: 53px;
-  height: 53px;
-  border: none;
-  border-radius: 13px;
-  color: white;
-  background: #6366f1;
-  font-size: 19px;
+.quiz-option span {
+	width: 26px;
+	height: 26px;
+	flex-shrink: 0;
+	border-radius: 50%;
+	color: white;
+	background: var(--sm-primary);
+	font-size: 12px;
+	font-weight: 700;
+	display: flex;
+	align-items: center;
+	justify-content: center;
 }
 
-.send-btn:disabled {
-  cursor: not-allowed;
-  background: #c7d2fe;
+.quiz-option p {
+	margin: 0;
+	color: var(--sm-text);
+	font-size: 14px;
 }
 
-.sources-panel {
-  padding: 19px;
+.quiz-card details {
+	margin-top: 12px;
 }
 
-.sources-header {
-  margin-bottom: 18px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.quiz-card summary {
+	cursor: pointer;
+	color: var(--sm-primary-dark);
+	font-weight: 700;
 }
 
-.sources-header h5 {
-  margin: 0;
-  font-weight: 700;
+.quiz-card details p {
+	margin: 8px 0 0;
+	color: var(--sm-text-soft);
+	line-height: 1.6;
 }
 
-.sources-header span {
-  padding: 5px 9px;
-  border-radius: 20px;
-  color: #4338ca;
-  background: #eef2ff;
-  font-size: 11px;
-  font-weight: 700;
+.typing {
+	width: 78px;
+	display: flex;
+	gap: 5px;
 }
 
-.sources-empty {
-  padding: 40px 10px;
-  text-align: center;
+.typing span {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--sm-primary);
+	animation: typing 1s infinite ease-in-out;
 }
 
-.source-empty-icon {
-  width: 55px;
-  height: 55px;
-  margin: 0 auto 13px;
-  border-radius: 50%;
-  color: #6366f1;
-  background: #eef2ff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 24px;
+.typing span:nth-child(2) {
+	animation-delay: 0.15s;
 }
 
-.sources-empty p {
-  color: #6b7280;
-  font-size: 13px;
-  line-height: 1.6;
+.typing span:nth-child(3) {
+	animation-delay: 0.3s;
 }
 
-.source-list {
-  max-height: 376px;
-  overflow-y: auto;
+.input-area {
+	padding: 18px;
+	border-top: 1px solid var(--sm-border);
+	background: var(--sm-card);
+	display: flex;
+	gap: 12px;
 }
 
-.source-card {
-  margin-bottom: 11px;
-  padding: 13px;
-  border: 1px solid #e0e7ff;
-  border-radius: 12px;
-  background: #fafaff;
+.input-area textarea {
+	flex: 1;
+	padding: 13px 15px;
+	border: 1px solid var(--sm-border);
+	border-radius: 14px;
+	outline: none;
+	color: var(--sm-text);
+	background: #fffdfa;
+	resize: none;
 }
 
-.source-top {
-  margin-bottom: 9px;
-  display: flex;
-  justify-content: space-between;
-  gap: 7px;
+.input-area textarea:focus {
+	border-color: var(--sm-primary);
+	box-shadow: 0 0 0 3px var(--sm-primary-soft);
 }
 
-.source-top div {
-  min-width: 0;
+.input-area button {
+	width: 52px;
+	border: none;
+	border-radius: 14px;
+	color: white;
+	background: linear-gradient(135deg, var(--sm-primary), var(--sm-accent));
+	font-size: 20px;
 }
 
-.source-top strong {
-  display: block;
-  margin-top: 6px;
-  color: #111827;
-  font-size: 13px;
-}
-
-.rank-badge {
-  padding: 3px 7px;
-  border-radius: 12px;
-  color: #4338ca;
-  background: #eef2ff;
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.score-badge {
-  color: #16a34a;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.source-card p {
-  margin: 0 0 10px;
-  color: #4b5563;
-  font-size: 12px;
-  line-height: 1.55;
-}
-
-.score-progress {
-  height: 6px;
-  margin-bottom: 9px;
-  border-radius: 20px;
-  background: #e5e7eb;
-  overflow: hidden;
-}
-
-.score-progress-bar {
-  height: 100%;
-  border-radius: 20px;
-  background: #16a34a;
-}
-
-.source-card small {
-  color: #6b7280;
-  font-size: 11px;
-}
-
-.algorithm-card {
-  margin-top: 18px;
-  padding: 15px;
-  border-radius: 13px;
-  background: #111827;
-  color: white;
-}
-
-.algorithm-card h5 {
-  margin: 0 0 14px;
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.algorithm-item {
-  margin-bottom: 11px;
-  color: #cbd5e1;
-  font-size: 12px;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-}
-
-.algorithm-item:last-child {
-  margin-bottom: 0;
-}
-
-.algorithm-item i {
-  color: #818cf8;
-  font-size: 16px;
+.input-area button:disabled {
+	cursor: not-allowed;
+	opacity: 0.55;
 }
 
 .toast-message {
-  position: fixed;
-  z-index: 500;
-  top: 94px;
-  right: 28px;
-  padding: 14px 18px;
-  border-radius: 11px;
-  color: white;
-  background: #16a34a;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.15);
+	position: fixed;
+	z-index: 500;
+	top: 94px;
+	right: 28px;
+	padding: 14px 18px;
+	border-radius: 11px;
+	color: white;
+	box-shadow: 0 10px 30px rgba(67, 45, 30, 0.16);
+	display: flex;
+	align-items: center;
+	gap: 9px;
 }
 
-@media (max-width: 1350px) {
-  .chat-layout {
-    grid-template-columns: 235px minmax(380px, 1fr);
-  }
-
-  .sources-panel {
-    grid-column: 1 / -1;
-  }
+.toast-message.success {
+	background: var(--sm-success);
 }
 
-@media (max-width: 850px) {
-  .page-header,
-  .chat-header {
-    flex-direction: column;
-    align-items: flex-start;
-  }
+.toast-message.error {
+	background: var(--sm-danger);
+}
 
-  .chat-layout {
-    height: auto;
-    display: flex;
-    flex-direction: column;
-  }
+.recommendation-list {
+	margin-top: 14px;
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
 
-  .history-panel,
-  .chat-panel,
-  .sources-panel {
-    min-height: auto;
-  }
+.recommendation-card {
+	padding: 15px;
+	border: 1px solid var(--sm-border);
+	border-radius: 14px;
+	background: #fffaf4;
+}
 
-  .messages-area {
-    min-height: 500px;
-  }
+.recommendation-top {
+	margin-bottom: 10px;
+	display: flex;
+	justify-content: space-between;
+	gap: 14px;
+}
+
+.recommendation-top h5 {
+	margin: 0 0 4px;
+	color: var(--sm-text);
+	font-size: 15px;
+	font-weight: 700;
+	line-height: 1.4;
+}
+
+.recommendation-top small {
+	color: var(--sm-text-soft);
+}
+
+.recommendation-top span {
+	min-width: 54px;
+	height: 32px;
+	padding: 0 10px;
+	border-radius: 20px;
+	color: white;
+	background: linear-gradient(135deg, var(--sm-primary), var(--sm-accent));
+	font-size: 13px;
+	font-weight: 700;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.recommendation-card>p {
+	margin: 0 0 12px;
+	color: var(--sm-text-soft);
+	font-size: 14px;
+	line-height: 1.6;
+}
+
+.keyword-row {
+	margin-bottom: 13px;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 7px;
+}
+
+.keyword-row span {
+	padding: 5px 9px;
+	border-radius: 20px;
+	color: var(--sm-primary-dark);
+	background: var(--sm-primary-soft);
+	font-size: 12px;
+	font-weight: 600;
+}
+
+.recommendation-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 9px;
+}
+
+.recommendation-actions a,
+.recommendation-actions button {
+	height: 37px;
+	padding: 0 13px;
+	border-radius: 10px;
+	font-size: 13px;
+	font-weight: 700;
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	text-decoration: none;
+}
+
+.recommendation-actions a {
+	border: 1px solid var(--sm-border);
+	color: var(--sm-text);
+	background: #fffdfa;
+}
+
+.recommendation-actions button {
+	border: none;
+	color: white;
+	background: linear-gradient(135deg, var(--sm-primary), var(--sm-accent));
+}
+
+@keyframes typing {
+
+	0%,
+	80%,
+	100% {
+		transform: translateY(0);
+		opacity: 0.4;
+	}
+
+	40% {
+		transform: translateY(-4px);
+		opacity: 1;
+	}
+}
+
+@media (max-width: 1200px) {
+	.chat-layout {
+		grid-template-columns: 1fr;
+	}
+
+	.chat-sidebar {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+	}
+
+	.subject-card {
+		grid-column: 1 / -1;
+	}
+}
+
+@media (max-width: 768px) {
+
+	.page-header,
+	.chat-card-header {
+		flex-direction: column;
+		align-items: flex-start;
+	}
+
+	.subject-select {
+		width: 100%;
+	}
+
+	.chat-sidebar {
+		grid-template-columns: 1fr;
+	}
+
+	.chat-card {
+		height: auto;
+		min-height: 680px;
+	}
+
+	.message-bubble {
+		max-width: 88%;
+	}
 }
 </style>

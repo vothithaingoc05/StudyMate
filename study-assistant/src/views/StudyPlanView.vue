@@ -1,6 +1,5 @@
 <template>
   <div class="study-plan-page">
-    <!-- Header -->
     <div class="page-header">
       <div>
         <h2>Kế hoạch ôn tập</h2>
@@ -13,11 +12,10 @@
       </button>
     </div>
 
-    <!-- Summary -->
     <div class="row g-4 mb-4">
       <div class="col-xl-3 col-md-6">
         <div class="summary-card">
-          <div class="summary-icon purple">
+          <div class="summary-icon total">
             <i class="bi bi-calendar-check-fill"></i>
           </div>
 
@@ -30,7 +28,7 @@
 
       <div class="col-xl-3 col-md-6">
         <div class="summary-card">
-          <div class="summary-icon blue">
+          <div class="summary-icon today">
             <i class="bi bi-calendar-day-fill"></i>
           </div>
 
@@ -43,7 +41,7 @@
 
       <div class="col-xl-3 col-md-6">
         <div class="summary-card">
-          <div class="summary-icon orange">
+          <div class="summary-icon pending">
             <i class="bi bi-hourglass-split"></i>
           </div>
 
@@ -56,7 +54,7 @@
 
       <div class="col-xl-3 col-md-6">
         <div class="summary-card">
-          <div class="summary-icon green">
+          <div class="summary-icon done">
             <i class="bi bi-stopwatch-fill"></i>
           </div>
 
@@ -68,34 +66,22 @@
       </div>
     </div>
 
-    <!-- Main Content -->
     <div class="row g-4">
-      <!-- Danh sách kế hoạch -->
       <div class="col-xl-8">
         <div class="content-card">
+          <div>
+            <h5>Lịch ôn tập của bạn</h5>
+          </div>
           <div class="toolbar">
-            <div>
-              <h5>Lịch ôn tập của bạn</h5>
-              <p>Theo dõi các buổi học và nội dung cần hoàn thành.</p>
-            </div>
-
             <div class="filters">
               <div class="search-box">
                 <i class="bi bi-search"></i>
-                <input
-                  v-model="searchKeyword"
-                  type="text"
-                  placeholder="Tìm kế hoạch..."
-                />
+                <input v-model="searchKeyword" type="text" placeholder="Tìm kế hoạch..." />
               </div>
 
               <select v-model="selectedSubject">
                 <option value="">Tất cả môn</option>
-                <option
-                  v-for="subject in subjects"
-                  :key="subject.id"
-                  :value="String(subject.id)"
-                >
+                <option v-for="subject in subjects" :key="subject.id" :value="String(subject.id)">
                   {{ subject.name }}
                 </option>
               </select>
@@ -109,21 +95,33 @@
             </div>
           </div>
 
-          <!-- Date Filters -->
           <div class="date-filter-row">
-            <button
-              v-for="filter in dateFilters"
-              :key="filter.value"
-              class="date-filter-btn"
-              :class="{ active: selectedDateFilter === filter.value }"
-              @click="selectedDateFilter = filter.value"
-            >
+            <button v-for="filter in dateFilters" :key="filter.value" class="date-filter-btn"
+              :class="{ active: selectedDateFilter === filter.value }" @click="selectedDateFilter = filter.value">
               {{ filter.label }}
             </button>
           </div>
 
-          <!-- Empty -->
-          <div v-if="filteredPlans.length === 0" class="empty-state">
+          <div v-if="isLoading" class="loading-state">
+            <span class="loading-spinner"></span>
+            <p>Đang tải kế hoạch ôn tập...</p>
+          </div>
+
+          <div v-else-if="apiError" class="api-error-state">
+            <div class="error-api-icon">
+              <i class="bi bi-exclamation-circle"></i>
+            </div>
+
+            <h5>Không thể tải dữ liệu</h5>
+            <p>{{ apiError }}</p>
+
+            <button class="retry-btn" @click="loadInitialData">
+              <i class="bi bi-arrow-clockwise"></i>
+              Thử lại
+            </button>
+          </div>
+
+          <div v-else-if="filteredPlans.length === 0" class="empty-state">
             <div class="empty-icon">
               <i class="bi bi-calendar2-x"></i>
             </div>
@@ -137,17 +135,11 @@
             </button>
           </div>
 
-          <!-- Plan List -->
           <div v-else class="plan-list">
-            <div
-              v-for="plan in filteredPlans"
-              :key="plan.id"
-              class="plan-card"
-              :class="{
-                completed: plan.status === 'DA_HOAN_THANH',
-                today: isToday(plan.studyDate),
-              }"
-            >
+            <div v-for="plan in filteredPlans" :key="plan.id" class="plan-card" :class="{
+              completed: plan.status === 'DA_HOAN_THANH',
+              today: isToday(plan.studyDate),
+            }">
               <div class="plan-time">
                 <strong>{{ formatTime(plan.startTime) }}</strong>
                 <span>{{ plan.durationMinutes }} phút</span>
@@ -159,10 +151,7 @@
                     <div class="heading-title">
                       <h4>{{ plan.title }}</h4>
 
-                      <span
-                        v-if="isToday(plan.studyDate)"
-                        class="today-badge"
-                      >
+                      <span v-if="isToday(plan.studyDate)" class="today-badge">
                         Hôm nay
                       </span>
                     </div>
@@ -174,19 +163,11 @@
                   </div>
 
                   <div class="action-group">
-                    <button
-                      class="action-btn edit"
-                      title="Sửa kế hoạch"
-                      @click="openEditModal(plan)"
-                    >
+                    <button class="action-btn edit" title="Sửa kế hoạch" @click="openEditModal(plan)">
                       <i class="bi bi-pencil-square"></i>
                     </button>
 
-                    <button
-                      class="action-btn delete"
-                      title="Xóa kế hoạch"
-                      @click="confirmDelete(plan)"
-                    >
+                    <button class="action-btn delete" title="Xóa kế hoạch" @click="confirmDelete(plan)">
                       <i class="bi bi-trash3"></i>
                     </button>
                   </div>
@@ -195,15 +176,12 @@
                 <div class="plan-meta">
                   <span class="subject-badge">
                     <i class="bi bi-book"></i>
-                    {{ getSubjectName(plan.subjectId) }}
+                    {{ plan.subjectName }}
                   </span>
 
-                  <span
-                    v-if="getTaskName(plan.taskId)"
-                    class="task-badge"
-                  >
+                  <span v-if="plan.taskTitle" class="task-badge">
                     <i class="bi bi-check2-square"></i>
-                    {{ getTaskName(plan.taskId) }}
+                    {{ plan.taskTitle }}
                   </span>
                 </div>
 
@@ -212,12 +190,8 @@
                 </p>
 
                 <div class="plan-footer">
-                  <select
-                    class="status-select"
-                    :class="plan.status.toLowerCase()"
-                    :value="plan.status"
-                    @change="changeStatus(plan, $event.target.value)"
-                  >
+                  <select class="status-select" :class="plan.status.toLowerCase()" :value="plan.status"
+                    @change="changeStatus(plan, $event.target.value)">
                     <option value="CHUA_THUC_HIEN">Chưa thực hiện</option>
                     <option value="DANG_THUC_HIEN">Đang thực hiện</option>
                     <option value="DA_HOAN_THANH">Đã hoàn thành</option>
@@ -246,11 +220,7 @@
             Chưa có lịch học sắp tới.
           </div>
 
-          <div
-            v-for="plan in upcomingPlans.slice(0, 4)"
-            :key="plan.id"
-            class="upcoming-item"
-          >
+          <div v-for="plan in upcomingPlans.slice(0, 4)" :key="plan.id" class="upcoming-item">
             <div class="upcoming-date">
               <strong>{{ getDay(plan.studyDate) }}</strong>
               <small>{{ getMonth(plan.studyDate) }}</small>
@@ -259,8 +229,7 @@
             <div class="upcoming-content">
               <p>{{ plan.title }}</p>
               <small>
-                {{ formatTime(plan.startTime) }} ·
-                {{ getSubjectName(plan.subjectId) }}
+                {{ formatTime(plan.startTime) }} · {{ plan.subjectName }}
               </small>
             </div>
           </div>
@@ -279,10 +248,7 @@
           </div>
 
           <div class="custom-progress">
-            <div
-              class="custom-progress-bar"
-              :style="{ width: `${completionPercent}%` }"
-            ></div>
+            <div class="custom-progress-bar" :style="{ width: `${completionPercent}%` }"></div>
           </div>
 
           <p>
@@ -313,12 +279,8 @@
         <form @submit.prevent="savePlan">
           <div class="form-group">
             <label>Tiêu đề kế hoạch <span>*</span></label>
-            <input
-              v-model.trim="form.title"
-              type="text"
-              placeholder="Ví dụ: Ôn Python buổi tối"
-              :class="{ invalid: errors.title }"
-            />
+            <input v-model.trim="form.title" type="text" placeholder="Ví dụ: Ôn Python buổi tối"
+              :class="{ invalid: errors.title }" />
             <small v-if="errors.title" class="error-text">
               {{ errors.title }}
             </small>
@@ -328,17 +290,9 @@
             <div class="col-md-6">
               <div class="form-group">
                 <label>Môn học <span>*</span></label>
-                <select
-                  v-model="form.subjectId"
-                  :class="{ invalid: errors.subjectId }"
-                  @change="form.taskId = ''"
-                >
+                <select v-model="form.subjectId" :class="{ invalid: errors.subjectId }" @change="form.taskId = ''">
                   <option value="">Chọn môn học</option>
-                  <option
-                    v-for="subject in subjects"
-                    :key="subject.id"
-                    :value="String(subject.id)"
-                  >
+                  <option v-for="subject in subjects" :key="subject.id" :value="String(subject.id)">
                     {{ subject.name }}
                   </option>
                 </select>
@@ -353,11 +307,7 @@
                 <label>Bài tập liên quan</label>
                 <select v-model="form.taskId">
                   <option value="">Không liên kết bài tập</option>
-                  <option
-                    v-for="task in availableTasks"
-                    :key="task.id"
-                    :value="String(task.id)"
-                  >
+                  <option v-for="task in availableTasks" :key="task.id" :value="String(task.id)">
                     {{ task.title }}
                   </option>
                 </select>
@@ -369,11 +319,7 @@
             <div class="col-md-5">
               <div class="form-group">
                 <label>Ngày học <span>*</span></label>
-                <input
-                  v-model="form.studyDate"
-                  type="date"
-                  :class="{ invalid: errors.studyDate }"
-                />
+                <input v-model="form.studyDate" type="date" :class="{ invalid: errors.studyDate }" />
                 <small v-if="errors.studyDate" class="error-text">
                   {{ errors.studyDate }}
                 </small>
@@ -404,11 +350,8 @@
 
           <div class="form-group">
             <label>Nội dung cần ôn</label>
-            <textarea
-              v-model.trim="form.content"
-              rows="4"
-              placeholder="Ví dụ: Ôn vòng lặp for, while và làm bài tập minh họa..."
-            ></textarea>
+            <textarea v-model.trim="form.content" rows="4"
+              placeholder="Ví dụ: Ôn vòng lặp for, while và làm bài tập minh họa..."></textarea>
           </div>
 
           <div class="form-group">
@@ -440,9 +383,16 @@
               Hủy
             </button>
 
-            <button type="submit" class="save-btn">
-              <i class="bi bi-check-lg"></i>
-              {{ isEditing ? 'Lưu thay đổi' : 'Tạo kế hoạch' }}
+            <button type="submit" class="save-btn" :disabled="isSaving">
+              <template v-if="!isSaving">
+                <i class="bi bi-check-lg"></i>
+                {{ isEditing ? 'Lưu thay đổi' : 'Tạo kế hoạch' }}
+              </template>
+
+              <template v-else>
+                <span class="button-spinner"></span>
+                Đang lưu...
+              </template>
             </button>
           </div>
         </form>
@@ -467,17 +417,16 @@
             Hủy
           </button>
 
-          <button class="confirm-delete-btn" @click="deletePlan">
-            Xóa kế hoạch
+          <button class="confirm-delete-btn" :disabled="isDeleting" @click="deletePlan">
+            {{ isDeleting ? 'Đang xóa...' : 'Xóa kế hoạch' }}
           </button>
         </div>
       </div>
     </div>
 
-    <!-- Toast -->
-    <div v-if="toastMessage" class="toast-message">
-      <i class="bi bi-check-circle-fill"></i>
-      {{ toastMessage }}
+    <div v-if="toast.message" class="toast-message" :class="toast.type">
+      <i class="bi" :class="toast.type === 'success' ? 'bi-check-circle-fill' : 'bi-exclamation-circle-fill'"></i>
+      {{ toast.message }}
     </div>
   </div>
 </template>
@@ -489,24 +438,29 @@ import api from '../services/api'
 
 const router = useRouter()
 
+const plans = ref([])
 const subjects = ref([])
 const tasks = ref([])
-const plans = ref([])
-
-const isLoading = ref(false)
-const isSaving = ref(false)
-const apiError = ref('')
 
 const searchKeyword = ref('')
 const selectedSubject = ref('')
 const selectedStatus = ref('')
 const selectedDateFilter = ref('ALL')
 
+const isLoading = ref(false)
+const isSaving = ref(false)
+const isDeleting = ref(false)
+const apiError = ref('')
+
 const isModalOpen = ref(false)
 const isEditing = ref(false)
 const editingId = ref(null)
 const planToDelete = ref(null)
-const toastMessage = ref('')
+
+const toast = ref({
+  message: '',
+  type: 'success',
+})
 
 const dateFilters = [
   { label: 'Tất cả', value: 'ALL' },
@@ -515,67 +469,16 @@ const dateFilters = [
   { label: 'Đã qua', value: 'PAST' },
 ]
 
-const toInputDate = (date) => {
-  const offset = date.getTimezoneOffset() * 60000
-  return new Date(date.getTime() - offset).toISOString().slice(0, 10)
-}
-
-const createDateFromToday = (days) => {
-  const date = new Date()
-  date.setDate(date.getDate() + days)
-  return toInputDate(date)
-}
-
-const mapPlanFromApi = (plan) => ({
-  id: plan.id,
-  subjectId: String(plan.subject_id),
-  subjectName: plan.subject_name,
-  taskId: plan.task_id ? String(plan.task_id) : '',
-  taskTitle: plan.task_title || '',
-  title: plan.title,
-  content: plan.content || '',
-  studyDate: plan.study_date,
-  startTime: plan.start_time ? plan.start_time.slice(0, 5) : '',
-  durationMinutes: plan.duration_minutes,
-  status: plan.status,
-  completedAt: plan.completed_at,
-  createdAt: plan.created_at,
-  updatedAt: plan.updated_at,
-})
-
-const mapSubjectFromApi = (subject) => ({
-  id: subject.id,
-  name: subject.name,
-  color: subject.color || '#B9824C',
-})
-
-const mapTaskFromApi = (task) => ({
-  id: task.id,
-  subjectId: String(task.subject_id),
-  title: task.title,
-})
-
-const handleApiError = (error, fallbackMessage) => {
-  if (error.response?.status === 401) {
-    router.push('/dang-nhap')
-    return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.'
-  }
-
-  return error.response?.data?.detail || fallbackMessage
-}
-
-const emptyForm = () => ({
+const form = ref({
   subjectId: '',
   taskId: '',
   title: '',
   content: '',
-  studyDate: createDateFromToday(0),
+  studyDate: '',
   startTime: '19:00',
   durationMinutes: 60,
   status: 'CHUA_THUC_HIEN',
 })
-
-const form = ref(emptyForm())
 
 const errors = ref({
   title: '',
@@ -602,13 +505,11 @@ const totalStudyHours = computed(() => {
   )
 
   const hours = minutes / 60
-
   return Number.isInteger(hours) ? `${hours}h` : `${hours.toFixed(1)}h`
 })
 
 const completionPercent = computed(() => {
   if (plans.value.length === 0) return 0
-
   return Math.round((completedPlans.value / plans.value.length) * 100)
 })
 
@@ -619,9 +520,7 @@ const upcomingPlans = computed(() => {
         plan.status !== 'DA_HOAN_THANH' &&
         new Date(`${plan.studyDate}T23:59:59`).getTime() >= new Date().getTime(),
     )
-    .sort((first, second) => {
-      return getPlanTimestamp(first) - getPlanTimestamp(second)
-    })
+    .sort((first, second) => getPlanTimestamp(first) - getPlanTimestamp(second))
 })
 
 const availableTasks = computed(() => {
@@ -633,14 +532,15 @@ const availableTasks = computed(() => {
 })
 
 const filteredPlans = computed(() => {
-  const keyword = searchKeyword.value.toLowerCase()
+  const keyword = searchKeyword.value.trim().toLowerCase()
 
   return [...plans.value]
     .filter((plan) => {
       const matchesKeyword =
         plan.title.toLowerCase().includes(keyword) ||
-        plan.content.toLowerCase().includes(keyword) ||
-        getSubjectName(plan.subjectId).toLowerCase().includes(keyword)
+        (plan.content || '').toLowerCase().includes(keyword) ||
+        plan.subjectName.toLowerCase().includes(keyword) ||
+        (plan.taskTitle || '').toLowerCase().includes(keyword)
 
       const matchesSubject =
         !selectedSubject.value ||
@@ -658,7 +558,7 @@ const filteredPlans = computed(() => {
       if (selectedDateFilter.value === 'UPCOMING') {
         matchesDate =
           new Date(`${plan.studyDate}T23:59:59`).getTime() >=
-            new Date().getTime() && !isToday(plan.studyDate)
+          new Date().getTime() && !isToday(plan.studyDate)
       }
 
       if (selectedDateFilter.value === 'PAST') {
@@ -672,24 +572,262 @@ const filteredPlans = computed(() => {
     .sort((first, second) => getPlanTimestamp(first) - getPlanTimestamp(second))
 })
 
+const mapSubjectFromApi = (subject) => ({
+  id: subject.id,
+  name: subject.name,
+})
+
+const mapTaskFromApi = (task) => ({
+  id: task.id,
+  subjectId: task.subject_id,
+  title: task.title,
+})
+
+const mapPlanFromApi = (plan) => ({
+  id: plan.id,
+  subjectId: plan.subject_id,
+  subjectName: plan.subject_name,
+  taskId: plan.task_id ? String(plan.task_id) : '',
+  taskTitle: plan.task_title || '',
+  title: plan.title,
+  content: plan.content || '',
+  studyDate: plan.study_date,
+  startTime: plan.start_time ? String(plan.start_time).slice(0, 5) : '',
+  durationMinutes: plan.duration_minutes,
+  status: plan.status,
+  completedAt: plan.completed_at,
+  createdAt: plan.created_at,
+  updatedAt: plan.updated_at,
+})
+
+const showToast = (message, type = 'success') => {
+  toast.value = { message, type }
+
+  setTimeout(() => {
+    toast.value.message = ''
+  }, 2800)
+}
+
+const handleApiError = (error, fallbackMessage) => {
+  if (error.response?.status === 401) {
+    router.push('/dang-nhap')
+    return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.'
+  }
+
+  return error.response?.data?.detail || fallbackMessage
+}
+
+const fetchSubjects = async () => {
+  const response = await api.get('/subjects')
+  subjects.value = response.data.map(mapSubjectFromApi)
+}
+
+const fetchTasks = async () => {
+  const response = await api.get('/tasks')
+  tasks.value = response.data.map(mapTaskFromApi)
+}
+
+const fetchPlans = async () => {
+  const response = await api.get('/study-plans')
+  plans.value = response.data.map(mapPlanFromApi)
+}
+
+const loadInitialData = async () => {
+  isLoading.value = true
+  apiError.value = ''
+
+  try {
+    await Promise.all([fetchSubjects(), fetchTasks(), fetchPlans()])
+  } catch (error) {
+    apiError.value = handleApiError(
+      error,
+      'Không thể kết nối hệ thống. Vui lòng thử lại.',
+    )
+  } finally {
+    isLoading.value = false
+  }
+}
+
+const emptyForm = () => ({
+  subjectId: subjects.value[0]?.id ? String(subjects.value[0].id) : '',
+  taskId: '',
+  title: '',
+  content: '',
+  studyDate: toInputDate(new Date()),
+  startTime: '19:00',
+  durationMinutes: 60,
+  status: 'CHUA_THUC_HIEN',
+})
+
+const resetErrors = () => {
+  errors.value = {
+    title: '',
+    subjectId: '',
+    studyDate: '',
+  }
+}
+
+const openAddModal = () => {
+  isEditing.value = false
+  editingId.value = null
+  form.value = emptyForm()
+  resetErrors()
+  isModalOpen.value = true
+}
+
+const openEditModal = (plan) => {
+  isEditing.value = true
+  editingId.value = plan.id
+
+  form.value = {
+    subjectId: String(plan.subjectId),
+    taskId: plan.taskId ? String(plan.taskId) : '',
+    title: plan.title,
+    content: plan.content,
+    studyDate: plan.studyDate,
+    startTime: plan.startTime || '19:00',
+    durationMinutes: plan.durationMinutes,
+    status: plan.status,
+  }
+
+  resetErrors()
+  isModalOpen.value = true
+}
+
+const closeModal = () => {
+  if (isSaving.value) return
+
+  isModalOpen.value = false
+  resetErrors()
+}
+
+const validateForm = () => {
+  resetErrors()
+  let valid = true
+
+  if (!form.value.title.trim()) {
+    errors.value.title = 'Vui lòng nhập tiêu đề kế hoạch.'
+    valid = false
+  }
+
+  if (!form.value.subjectId) {
+    errors.value.subjectId = 'Vui lòng chọn môn học.'
+    valid = false
+  }
+
+  if (!form.value.studyDate) {
+    errors.value.studyDate = 'Vui lòng chọn ngày học.'
+    valid = false
+  }
+
+  return valid
+}
+
+const buildPayload = () => ({
+  subject_id: Number(form.value.subjectId),
+  task_id: form.value.taskId ? Number(form.value.taskId) : null,
+  title: form.value.title.trim(),
+  content: form.value.content.trim() || null,
+  study_date: form.value.studyDate,
+  start_time: form.value.startTime ? `${form.value.startTime}:00` : null,
+  duration_minutes: Number(form.value.durationMinutes),
+  status: form.value.status,
+})
+
+const savePlan = async () => {
+  if (!validateForm()) return
+
+  isSaving.value = true
+
+  try {
+    if (isEditing.value) {
+      const response = await api.put(
+        `/study-plans/${editingId.value}`,
+        buildPayload(),
+      )
+
+      const updatedPlan = mapPlanFromApi(response.data)
+      const index = plans.value.findIndex((plan) => plan.id === editingId.value)
+
+      if (index !== -1) {
+        plans.value[index] = updatedPlan
+      }
+
+      showToast('Cập nhật kế hoạch thành công.')
+    } else {
+      const response = await api.post('/study-plans', buildPayload())
+      plans.value.unshift(mapPlanFromApi(response.data))
+      showToast('Tạo kế hoạch học thành công.')
+    }
+
+    closeModal()
+  } catch (error) {
+    showToast(
+      handleApiError(error, 'Không thể lưu kế hoạch học. Vui lòng thử lại.'),
+      'error',
+    )
+  } finally {
+    isSaving.value = false
+  }
+}
+
+const changeStatus = async (plan, status) => {
+  try {
+    const response = await api.patch(`/study-plans/${plan.id}/status`, {
+      status,
+    })
+
+    const updatedPlan = mapPlanFromApi(response.data)
+    const index = plans.value.findIndex((item) => item.id === plan.id)
+
+    if (index !== -1) {
+      plans.value[index] = updatedPlan
+    }
+
+    showToast('Cập nhật tiến độ học tập thành công.')
+  } catch (error) {
+    showToast(
+      handleApiError(error, 'Không thể cập nhật trạng thái.'),
+      'error',
+    )
+  }
+}
+
+const confirmDelete = (plan) => {
+  planToDelete.value = plan
+}
+
+const deletePlan = async () => {
+  if (!planToDelete.value) return
+
+  isDeleting.value = true
+
+  try {
+    await api.delete(`/study-plans/${planToDelete.value.id}`)
+
+    plans.value = plans.value.filter(
+      (plan) => plan.id !== planToDelete.value.id,
+    )
+
+    planToDelete.value = null
+    showToast('Đã xóa kế hoạch học.')
+  } catch (error) {
+    showToast(
+      handleApiError(error, 'Không thể xóa kế hoạch học.'),
+      'error',
+    )
+  } finally {
+    isDeleting.value = false
+  }
+}
+
+function toInputDate(date) {
+  const offset = date.getTimezoneOffset() * 60000
+  return new Date(date.getTime() - offset).toISOString().slice(0, 10)
+}
+
 const getPlanTimestamp = (plan) => {
   return new Date(`${plan.studyDate}T${plan.startTime || '00:00'}`).getTime()
-}
-
-const getSubjectName = (subjectId) => {
-  const subject = subjects.value.find(
-    (item) => String(item.id) === String(subjectId),
-  )
-
-  return subject ? subject.name : 'Không xác định'
-}
-
-const getTaskName = (taskId) => {
-  if (!taskId) return ''
-
-  const task = tasks.value.find((item) => String(item.id) === String(taskId))
-
-  return task ? task.title : ''
 }
 
 const isToday = (dateValue) => {
@@ -708,7 +846,7 @@ const formatDate = (dateValue) => {
 }
 
 const formatTime = (timeValue) => {
-  return timeValue || '--:--'
+  return timeValue ? String(timeValue).slice(0, 5) : '--:--'
 }
 
 const getDay = (dateValue) => {
@@ -739,210 +877,17 @@ const getDurationText = (minutes) => {
   return `${hours} giờ ${remainMinutes} phút`
 }
 
-const showToast = (message) => {
-  toastMessage.value = message
-
-  setTimeout(() => {
-    toastMessage.value = ''
-  }, 2600)
-}
-
-const resetErrors = () => {
-  errors.value = {
-    title: '',
-    subjectId: '',
-    studyDate: '',
-  }
-}
-
-const openAddModal = () => {
-  isEditing.value = false
-  editingId.value = null
-  form.value = emptyForm()
-  resetErrors()
-  isModalOpen.value = true
-}
-
-const openEditModal = (plan) => {
-  isEditing.value = true
-  editingId.value = plan.id
-  form.value = {
-    subjectId: plan.subjectId,
-    taskId: plan.taskId || '',
-    title: plan.title,
-    content: plan.content,
-    studyDate: plan.studyDate,
-    startTime: plan.startTime,
-    durationMinutes: plan.durationMinutes,
-    status: plan.status,
-  }
-  resetErrors()
-  isModalOpen.value = true
-}
-
-const closeModal = () => {
-  if (isSaving.value) return
-
-  isModalOpen.value = false
-  resetErrors()
-}
-
-const validateForm = () => {
-  resetErrors()
-  let valid = true
-
-  if (!form.value.title) {
-    errors.value.title = 'Vui lòng nhập tiêu đề kế hoạch.'
-    valid = false
-  }
-
-  if (!form.value.subjectId) {
-    errors.value.subjectId = 'Vui lòng chọn môn học.'
-    valid = false
-  }
-
-  if (!form.value.studyDate) {
-    errors.value.studyDate = 'Vui lòng chọn ngày học.'
-    valid = false
-  }
-
-  return valid
-}
-
-const buildPayload = () => ({
-  subject_id: Number(form.value.subjectId),
-  task_id: form.value.taskId ? Number(form.value.taskId) : null,
-  title: form.value.title.trim(),
-  content: form.value.content.trim() || null,
-  study_date: form.value.studyDate,
-  start_time: form.value.startTime || null,
-  duration_minutes: form.value.durationMinutes,
-  status: form.value.status,
-})
-
-const fetchSubjects = async () => {
-  try {
-    const response = await api.get('/subjects')
-    subjects.value = response.data.map(mapSubjectFromApi)
-  } catch (error) {
-    console.error('Không thể tải danh sách môn học:', error)
-  }
-}
-
-const fetchTasks = async () => {
-  try {
-    const response = await api.get('/tasks')
-    tasks.value = response.data.map(mapTaskFromApi)
-  } catch (error) {
-    console.error('Không thể tải danh sách bài tập:', error)
-  }
-}
-
-const fetchPlans = async () => {
-  isLoading.value = true
-  apiError.value = ''
-
-  try {
-    const response = await api.get('/study-plans')
-    plans.value = response.data.map(mapPlanFromApi)
-  } catch (error) {
-    apiError.value = handleApiError(
-      error,
-      'Không thể tải kế hoạch học tập. Vui lòng thử lại.',
-    )
-  } finally {
-    isLoading.value = false
-  }
-}
-
-const savePlan = async () => {
-  if (!validateForm()) return
-
-  isSaving.value = true
-
-  try {
-    if (isEditing.value) {
-      const response = await api.put(
-        `/study-plans/${editingId.value}`,
-        buildPayload(),
-      )
-
-      const updatedPlan = mapPlanFromApi(response.data)
-      const index = plans.value.findIndex((plan) => plan.id === editingId.value)
-
-      if (index !== -1) {
-        plans.value[index] = updatedPlan
-      }
-
-      showToast('Cập nhật kế hoạch thành công.')
-    } else {
-      const response = await api.post('/study-plans', buildPayload())
-      plans.value.unshift(mapPlanFromApi(response.data))
-      showToast('Tạo kế hoạch học thành công.')
-    }
-
-    closeModal()
-  } catch (error) {
-    const message = handleApiError(
-      error,
-      'Không thể lưu kế hoạch. Vui lòng thử lại.',
-    )
-    showToast(message)
-  } finally {
-    isSaving.value = false
-  }
-}
-
-const changeStatus = async (plan, status) => {
-  try {
-    const response = await api.patch(`/study-plans/${plan.id}/status`, {
-      status,
-    })
-
-    const updatedPlan = mapPlanFromApi(response.data)
-    const index = plans.value.findIndex((p) => p.id === plan.id)
-
-    if (index !== -1) {
-      plans.value[index] = updatedPlan
-    }
-
-    showToast('Cập nhật tiến độ học tập thành công.')
-  } catch (error) {
-    const message = handleApiError(
-      error,
-      'Không thể cập nhật trạng thái. Vui lòng thử lại.',
-    )
-    showToast(message)
-  }
-}
-
-const confirmDelete = (plan) => {
-  planToDelete.value = plan
-}
-
-const deletePlan = async () => {
-  try {
-    await api.delete(`/study-plans/${planToDelete.value.id}`)
-    plans.value = plans.value.filter((plan) => plan.id !== planToDelete.value.id)
-    planToDelete.value = null
-    showToast('Đã xóa kế hoạch học.')
-  } catch (error) {
-    const message = handleApiError(
-      error,
-      'Không thể xóa kế hoạch. Vui lòng thử lại.',
-    )
-    showToast(message)
-  }
-}
 
 onMounted(() => {
-  fetchSubjects()
-  fetchTasks()
-  fetchPlans()
+  loadInitialData()
+
 })
 </script>
-
 <style scoped>
+.study-plan-page {
+  position: relative;
+}
+
 .page-header {
   margin-bottom: 25px;
   display: flex;
@@ -952,14 +897,14 @@ onMounted(() => {
 
 .page-header h2 {
   margin: 0 0 7px;
-  color: #111827;
+  color: var(--sm-text);
   font-size: 27px;
   font-weight: 700;
 }
 
 .page-header p {
   margin: 0;
-  color: #6b7280;
+  color: var(--sm-text-soft);
 }
 
 .primary-btn {
@@ -968,24 +913,26 @@ onMounted(() => {
   border: none;
   border-radius: 12px;
   color: white;
-  background: #6366f1;
+  background: linear-gradient(135deg, var(--sm-primary), var(--sm-accent));
+  box-shadow: 0 10px 22px rgba(185, 130, 76, 0.2);
   font-weight: 600;
   display: inline-flex;
   align-items: center;
   gap: 9px;
-  transition: 0.2s;
 }
 
 .primary-btn:hover {
-  background: #4f46e5;
+  background: linear-gradient(135deg, var(--sm-primary-dark), var(--sm-primary));
+  transform: translateY(-1px);
 }
 
 .summary-card {
   height: 110px;
   padding: 22px;
+  border: 1px solid var(--sm-border);
   border-radius: 18px;
-  border: 1px solid #edf0f5;
-  background: white;
+  background: var(--sm-card);
+  box-shadow: var(--sm-shadow-sm);
   display: flex;
   align-items: center;
   gap: 18px;
@@ -997,39 +944,39 @@ onMounted(() => {
   border-radius: 15px;
   font-size: 25px;
   display: flex;
-  justify-content: center;
   align-items: center;
+  justify-content: center;
 }
 
-.summary-icon.purple {
-  color: #6366f1;
-  background: #eef2ff;
+.summary-icon.total {
+  color: var(--sm-primary);
+  background: var(--sm-primary-soft);
 }
 
-.summary-icon.blue {
-  color: #2563eb;
-  background: #eff6ff;
+.summary-icon.today {
+  color: var(--sm-primary-dark);
+  background: var(--sm-accent-soft);
 }
 
-.summary-icon.orange {
-  color: #f97316;
-  background: #fff7ed;
+.summary-icon.pending {
+  color: var(--sm-warning);
+  background: var(--sm-warning-bg);
 }
 
-.summary-icon.green {
-  color: #16a34a;
-  background: #f0fdf4;
+.summary-icon.done {
+  color: var(--sm-success);
+  background: var(--sm-success-bg);
 }
 
 .summary-card p {
   margin: 0 0 6px;
-  color: #6b7280;
+  color: var(--sm-text-soft);
   font-size: 14px;
 }
 
 .summary-card h3 {
   margin: 0;
-  color: #111827;
+  color: var(--sm-text);
   font-size: 28px;
   font-weight: 700;
 }
@@ -1037,9 +984,10 @@ onMounted(() => {
 .content-card,
 .side-card {
   padding: 24px;
+  border: 1px solid var(--sm-border);
   border-radius: 19px;
-  border: 1px solid #edf0f5;
-  background: white;
+  background: var(--sm-card);
+  box-shadow: var(--sm-shadow-sm);
 }
 
 .toolbar {
@@ -1051,12 +999,13 @@ onMounted(() => {
 
 .toolbar h5 {
   margin: 0 0 5px;
+  color: var(--sm-text);
   font-weight: 700;
 }
 
 .toolbar p {
   margin: 0;
-  color: #6b7280;
+  color: var(--sm-text-soft);
   font-size: 14px;
 }
 
@@ -1069,52 +1018,129 @@ onMounted(() => {
   width: 215px;
   height: 43px;
   padding: 0 13px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--sm-border);
   border-radius: 11px;
+  color: var(--sm-text-soft);
+  background: #fffdfa;
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #6b7280;
+}
+
+.search-box:focus-within {
+  border-color: #d8b992;
+  box-shadow: 0 0 0 3px var(--sm-primary-soft);
 }
 
 .search-box input {
   width: 100%;
   border: none;
   outline: none;
+  color: var(--sm-text);
+  background: transparent;
 }
 
 .filters select {
   height: 43px;
   min-width: 133px;
   padding: 0 11px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--sm-border);
   border-radius: 11px;
-  color: #374151;
-  background: white;
+  outline: none;
+  color: var(--sm-text);
+  background: #fffdfa;
 }
 
 .date-filter-row {
   margin-bottom: 22px;
   padding-bottom: 20px;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid #f2e8dd;
   display: flex;
   gap: 9px;
 }
 
 .date-filter-btn {
   padding: 8px 16px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--sm-border);
   border-radius: 22px;
-  color: #6b7280;
-  background: white;
+  color: var(--sm-text-soft);
+  background: #fffdfa;
   font-size: 14px;
   font-weight: 500;
 }
 
 .date-filter-btn.active {
   color: white;
-  border-color: #6366f1;
-  background: #6366f1;
+  border-color: var(--sm-primary);
+  background: linear-gradient(135deg, var(--sm-primary), var(--sm-accent));
+  box-shadow: 0 8px 18px rgba(185, 130, 76, 0.18);
+}
+
+.loading-state,
+.api-error-state,
+.empty-state {
+  padding: 56px 20px;
+  text-align: center;
+}
+
+.loading-spinner {
+  width: 39px;
+  height: 39px;
+  margin: 0 auto;
+  border: 4px solid #ead8c3;
+  border-top-color: var(--sm-primary);
+  border-radius: 50%;
+  display: block;
+  animation: spin 0.75s linear infinite;
+}
+
+.loading-state p,
+.api-error-state p,
+.empty-state p {
+  margin-top: 16px;
+  color: var(--sm-text-soft);
+}
+
+.empty-icon,
+.error-api-icon {
+  width: 68px;
+  height: 68px;
+  margin: 0 auto 18px;
+  border-radius: 50%;
+  font-size: 31px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.empty-icon {
+  color: var(--sm-primary);
+  background: var(--sm-primary-soft);
+}
+
+.error-api-icon {
+  color: var(--sm-danger);
+  background: var(--sm-danger-bg);
+}
+
+.empty-state h5,
+.api-error-state h5 {
+  color: var(--sm-text);
+  font-weight: 700;
+}
+
+.retry-btn {
+  height: 45px;
+  padding: 0 18px;
+  border: 1px solid var(--sm-border-strong);
+  border-radius: 11px;
+  color: var(--sm-primary-dark);
+  background: var(--sm-primary-soft);
+  font-weight: 600;
+}
+
+.retry-btn i {
+  margin-right: 7px;
 }
 
 .plan-list {
@@ -1125,25 +1151,28 @@ onMounted(() => {
 
 .plan-card {
   padding: 18px;
-  border: 1px solid #edf0f5;
+  border: 1px solid var(--sm-border);
+  border-left: 5px solid var(--sm-primary);
   border-radius: 16px;
+  background: #fffdfa;
   display: flex;
   gap: 17px;
   transition: 0.2s;
 }
 
 .plan-card:hover {
-  border-color: #c7d2fe;
-  box-shadow: 0 5px 17px rgba(15, 23, 42, 0.05);
+  border-color: var(--sm-border-strong);
+  box-shadow: var(--sm-shadow-sm);
 }
 
 .plan-card.today {
-  border-color: #c7d2fe;
-  background: #fafaff;
+  background: #fff9f1;
+  border-left-color: var(--sm-accent);
 }
 
 .plan-card.completed {
-  opacity: 0.75;
+  opacity: 0.76;
+  border-left-color: var(--sm-success);
 }
 
 .plan-time {
@@ -1152,8 +1181,8 @@ onMounted(() => {
   padding: 12px 8px;
   flex-shrink: 0;
   border-radius: 13px;
-  color: #4338ca;
-  background: #eef2ff;
+  color: var(--sm-primary-dark);
+  background: var(--sm-primary-soft);
   text-align: center;
 }
 
@@ -1164,7 +1193,7 @@ onMounted(() => {
 }
 
 .plan-time span {
-  color: #6366f1;
+  color: var(--sm-primary);
   font-size: 11px;
   font-weight: 600;
 }
@@ -1183,11 +1212,12 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 9px;
+  flex-wrap: wrap;
 }
 
 .heading-title h4 {
   margin: 0;
-  color: #111827;
+  color: var(--sm-text);
   font-size: 17px;
   font-weight: 700;
 }
@@ -1195,15 +1225,15 @@ onMounted(() => {
 .today-badge {
   padding: 4px 10px;
   border-radius: 20px;
-  color: #2563eb;
-  background: #dbeafe;
+  color: var(--sm-primary-dark);
+  background: var(--sm-primary-soft);
   font-size: 11px;
   font-weight: 700;
 }
 
 .plan-date {
   margin: 7px 0 0;
-  color: #6b7280;
+  color: var(--sm-text-soft);
   font-size: 13px;
   display: flex;
   align-items: center;
@@ -1223,13 +1253,13 @@ onMounted(() => {
 }
 
 .action-btn.edit {
-  color: #ea580c;
-  background: #fff7ed;
+  color: var(--sm-warning);
+  background: var(--sm-warning-bg);
 }
 
 .action-btn.delete {
-  color: #dc2626;
-  background: #fef2f2;
+  color: var(--sm-danger);
+  background: var(--sm-danger-bg);
 }
 
 .plan-meta {
@@ -1251,25 +1281,27 @@ onMounted(() => {
 }
 
 .subject-badge {
-  color: #4338ca;
-  background: #eef2ff;
+  color: var(--sm-primary-dark);
+  background: var(--sm-primary-soft);
 }
 
 .task-badge {
-  color: #0369a1;
-  background: #f0f9ff;
+  color: var(--sm-success);
+  background: var(--sm-success-bg);
 }
 
 .plan-description {
   margin: 13px 0;
-  color: #4b5563;
+  color: var(--sm-text-soft);
   font-size: 14px;
+  line-height: 1.6;
 }
 
 .plan-footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
 }
 
 .status-select {
@@ -1282,22 +1314,22 @@ onMounted(() => {
 }
 
 .status-select.chua_thuc_hien {
-  color: #dc2626;
-  background: #fef2f2;
+  color: var(--sm-danger);
+  background: var(--sm-danger-bg);
 }
 
 .status-select.dang_thuc_hien {
-  color: #ea580c;
-  background: #fff7ed;
+  color: var(--sm-warning);
+  background: var(--sm-warning-bg);
 }
 
 .status-select.da_hoan_thanh {
-  color: #15803d;
-  background: #f0fdf4;
+  color: var(--sm-success);
+  background: var(--sm-success-bg);
 }
 
 .duration-note {
-  color: #6b7280;
+  color: var(--sm-text-soft);
   font-size: 13px;
   display: flex;
   align-items: center;
@@ -1313,21 +1345,22 @@ onMounted(() => {
 
 .side-header h5 {
   margin: 0;
+  color: var(--sm-text);
   font-weight: 700;
 }
 
 .side-header span {
   padding: 5px 10px;
   border-radius: 20px;
-  color: #4338ca;
-  background: #eef2ff;
+  color: var(--sm-primary-dark);
+  background: var(--sm-primary-soft);
   font-size: 12px;
   font-weight: 600;
 }
 
 .upcoming-item {
   padding: 13px 0;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid #f2e8dd;
   display: flex;
   align-items: center;
   gap: 13px;
@@ -1340,10 +1373,10 @@ onMounted(() => {
 .upcoming-date {
   width: 53px;
   height: 55px;
-  border-radius: 13px;
-  color: #4338ca;
-  background: #eef2ff;
   flex-shrink: 0;
+  border-radius: 13px;
+  color: var(--sm-primary-dark);
+  background: var(--sm-primary-soft);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1355,40 +1388,43 @@ onMounted(() => {
 }
 
 .upcoming-date small {
-  color: #6366f1;
+  color: var(--sm-primary);
   font-size: 11px;
   font-weight: 700;
 }
 
 .upcoming-content p {
   margin: 0 0 5px;
-  color: #111827;
+  color: var(--sm-text);
   font-size: 14px;
   font-weight: 600;
 }
 
 .upcoming-content small {
-  color: #6b7280;
+  color: var(--sm-text-soft);
 }
 
 .small-empty {
   padding: 22px 0;
-  color: #6b7280;
+  color: var(--sm-text-soft);
   font-size: 14px;
 }
 
 .progress-card {
   padding: 24px;
   border-radius: 19px;
-  color: white;
-  background: linear-gradient(135deg, #4f46e5, #7c3aed);
+  color: #fffaf4;
+  background:
+    radial-gradient(circle at 90% 12%, rgba(241, 221, 196, 0.25), transparent 26%),
+    linear-gradient(145deg, #3b2f2a, #765139, #b9824c);
+  box-shadow: 0 24px 55px rgba(90, 58, 33, 0.18);
 }
 
 .progress-icon {
   width: 49px;
   height: 49px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.17);
+  background: rgba(255, 250, 244, 0.16);
   font-size: 24px;
   display: flex;
   align-items: center;
@@ -1411,55 +1447,28 @@ onMounted(() => {
 }
 
 .progress-value span {
-  color: #e0e7ff;
+  color: #f1ddc4;
 }
 
 .custom-progress {
   height: 9px;
   margin: 16px 0;
   border-radius: 20px;
-  background: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 250, 244, 0.22);
   overflow: hidden;
 }
 
 .custom-progress-bar {
   height: 100%;
   border-radius: 20px;
-  background: white;
+  background: #fffaf4;
   transition: width 0.3s;
 }
 
 .progress-card p {
   margin: 0;
-  color: #e0e7ff;
+  color: #f1ddc4;
   font-size: 14px;
-}
-
-.empty-state {
-  padding: 56px 20px;
-  text-align: center;
-}
-
-.empty-icon {
-  width: 68px;
-  height: 68px;
-  margin: 0 auto 18px;
-  border-radius: 50%;
-  color: #6366f1;
-  background: #eef2ff;
-  font-size: 31px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.empty-state h5 {
-  font-weight: 700;
-}
-
-.empty-state p {
-  color: #6b7280;
-  margin-bottom: 22px;
 }
 
 .modal-overlay {
@@ -1467,7 +1476,8 @@ onMounted(() => {
   inset: 0;
   z-index: 300;
   padding: 22px;
-  background: rgba(15, 23, 42, 0.48);
+  background: rgba(48, 40, 33, 0.48);
+  backdrop-filter: blur(3px);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -1479,8 +1489,10 @@ onMounted(() => {
   max-height: 94vh;
   overflow-y: auto;
   padding: 27px;
+  border: 1px solid var(--sm-border);
   border-radius: 20px;
-  background: white;
+  background: var(--sm-card);
+  box-shadow: var(--sm-shadow-md);
 }
 
 .modal-header-custom {
@@ -1491,12 +1503,13 @@ onMounted(() => {
 
 .modal-header-custom h4 {
   margin: 0 0 6px;
+  color: var(--sm-text);
   font-weight: 700;
 }
 
 .modal-header-custom p {
   margin: 0;
-  color: #6b7280;
+  color: var(--sm-text-soft);
   font-size: 14px;
 }
 
@@ -1505,7 +1518,13 @@ onMounted(() => {
   height: 38px;
   border: none;
   border-radius: 9px;
-  background: #f3f4f6;
+  color: var(--sm-text);
+  background: var(--sm-accent-soft);
+}
+
+.close-btn:hover {
+  color: var(--sm-primary-dark);
+  background: var(--sm-primary-soft);
 }
 
 .form-group {
@@ -1515,13 +1534,13 @@ onMounted(() => {
 .form-group label {
   display: block;
   margin-bottom: 8px;
-  color: #374151;
+  color: var(--sm-text);
   font-size: 14px;
   font-weight: 600;
 }
 
 .form-group label span {
-  color: #dc2626;
+  color: var(--sm-danger);
 }
 
 .form-group input,
@@ -1529,34 +1548,37 @@ onMounted(() => {
 .form-group textarea {
   width: 100%;
   padding: 12px 13px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--sm-border);
   border-radius: 11px;
   outline: none;
+  color: var(--sm-text);
+  background: #fffdfa;
 }
 
 .form-group input:focus,
 .form-group select:focus,
 .form-group textarea:focus {
-  border-color: #6366f1;
+  border-color: #d8b992;
+  box-shadow: 0 0 0 3px var(--sm-primary-soft);
 }
 
 .form-group .invalid {
-  border-color: #dc2626;
+  border-color: var(--sm-danger);
 }
 
 .error-text {
   display: block;
   margin-top: 6px;
-  color: #dc2626;
+  color: var(--sm-danger);
   font-size: 12px;
 }
 
 .plan-preview {
   margin-bottom: 24px;
   padding: 15px;
+  border: 1px solid var(--sm-border-strong);
   border-radius: 13px;
-  background: #f8faff;
-  border: 1px solid #e0e7ff;
+  background: var(--sm-accent-soft);
   display: flex;
   align-items: center;
   gap: 13px;
@@ -1566,8 +1588,8 @@ onMounted(() => {
   width: 45px;
   height: 45px;
   border-radius: 12px;
-  color: #6366f1;
-  background: #eef2ff;
+  color: var(--sm-primary);
+  background: var(--sm-primary-soft);
   font-size: 22px;
   display: flex;
   align-items: center;
@@ -1576,12 +1598,12 @@ onMounted(() => {
 
 .plan-preview p {
   margin: 0 0 4px;
-  color: #6b7280;
+  color: var(--sm-text-soft);
   font-size: 13px;
 }
 
 .plan-preview strong {
-  color: #111827;
+  color: var(--sm-text);
   font-size: 14px;
 }
 
@@ -1601,26 +1623,52 @@ onMounted(() => {
 }
 
 .cancel-btn {
-  border: 1px solid #e5e7eb;
-  color: #374151;
-  background: white;
+  border: 1px solid var(--sm-border);
+  color: var(--sm-text);
+  background: #fffdfa;
+}
+
+.cancel-btn:hover {
+  background: var(--sm-accent-soft);
 }
 
 .save-btn {
   border: none;
   color: white;
-  background: #6366f1;
+  background: linear-gradient(135deg, var(--sm-primary), var(--sm-accent));
   display: flex;
   align-items: center;
   gap: 7px;
+}
+
+.save-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, var(--sm-primary-dark), var(--sm-primary));
+}
+
+.save-btn:disabled,
+.confirm-delete-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.button-spinner {
+  width: 17px;
+  height: 17px;
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  border-top-color: white;
+  border-radius: 50%;
+  display: inline-block;
+  animation: spin 0.7s linear infinite;
 }
 
 .delete-modal {
   width: 420px;
   max-width: 100%;
   padding: 31px;
+  border: 1px solid var(--sm-border);
   border-radius: 20px;
-  background: white;
+  background: var(--sm-card);
+  box-shadow: var(--sm-shadow-md);
   text-align: center;
 }
 
@@ -1629,8 +1677,8 @@ onMounted(() => {
   height: 62px;
   margin: 0 auto 18px;
   border-radius: 50%;
-  color: #dc2626;
-  background: #fef2f2;
+  color: var(--sm-danger);
+  background: var(--sm-danger-bg);
   font-size: 27px;
   display: flex;
   align-items: center;
@@ -1638,12 +1686,13 @@ onMounted(() => {
 }
 
 .delete-modal h4 {
+  color: var(--sm-text);
   font-weight: 700;
 }
 
 .delete-modal p {
   margin: 12px 0 25px;
-  color: #6b7280;
+  color: var(--sm-text-soft);
 }
 
 .delete-actions {
@@ -1655,7 +1704,7 @@ onMounted(() => {
 .confirm-delete-btn {
   border: none;
   color: white;
-  background: #dc2626;
+  background: var(--sm-danger);
 }
 
 .toast-message {
@@ -1666,20 +1715,38 @@ onMounted(() => {
   padding: 14px 18px;
   border-radius: 11px;
   color: white;
-  background: #16a34a;
+  box-shadow: 0 10px 30px rgba(67, 45, 30, 0.16);
   display: flex;
   align-items: center;
   gap: 9px;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.15);
+}
+
+.toast-message.success {
+  background: var(--sm-success);
+}
+
+.toast-message.error {
+  background: var(--sm-danger);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @media (max-width: 1200px) {
   .toolbar {
     flex-direction: column;
   }
+
+  .filters {
+    flex-wrap: wrap;
+  }
 }
 
 @media (max-width: 768px) {
+
   .page-header,
   .filters,
   .plan-heading,
@@ -1700,6 +1767,11 @@ onMounted(() => {
 
   .date-filter-row {
     overflow-x: auto;
+    padding-bottom: 15px;
+  }
+
+  .date-filter-btn {
+    flex-shrink: 0;
   }
 }
 </style>
