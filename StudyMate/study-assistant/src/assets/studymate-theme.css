@@ -1,0 +1,79 @@
+:root {
+  /* Background */
+  --sm-bg: #faf7f2;
+  --sm-bg-soft: #f5eee5;
+  --sm-card: #fffdfa;
+  --sm-card-white: #ffffff;
+
+  /* Brown palette */
+  --sm-sidebar: #332720;
+  --sm-sidebar-soft: #44352d;
+  --sm-primary: #b9824c;
+  --sm-primary-dark: #966239;
+  --sm-primary-soft: #f3e6d6;
+  --sm-accent: #d9ae76;
+  --sm-accent-soft: #f8f0e4;
+
+  /* Text */
+  --sm-text: #302821;
+  --sm-text-soft: #786b60;
+  --sm-text-muted: #a09083;
+
+  /* Border and shadow */
+  --sm-border: #eee3d7;
+  --sm-border-strong: #e2d1be;
+  --sm-shadow-sm: 0 5px 18px rgba(67, 45, 30, 0.045);
+  --sm-shadow-md: 0 17px 40px rgba(67, 45, 30, 0.09);
+
+  /* Status */
+  --sm-success: #72825b;
+  --sm-success-bg: #edf2e7;
+  --sm-warning: #bb7538;
+  --sm-warning-bg: #fff3e6;
+  --sm-danger: #b55a49;
+  --sm-danger-bg: #fff0ed;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  color: var(--sm-text);
+  background: var(--sm-bg);
+  font-family: Inter, Arial, sans-serif;
+}
+
+a {
+  text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+button {
+  transition: all 0.2s ease;
+}
+
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f4ece2;
+}
+
+::-webkit-scrollbar-thumb {
+  border-radius: 20px;
+  background: #d6c2ae;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #ba9876;
+}
